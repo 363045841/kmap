@@ -1,15 +1,15 @@
 <template>
-  <HelloWorld></HelloWorld>
+  <kMap></kMap>
 </template>
 
 <script setup lang='ts' name=''>
 import { ref, reactive, onMounted } from 'vue'
-import HelloWorld from './components/kMap.vue';
+import kMap from './components/KLineChart.vue';
 import { tagLog } from './utils/logger';
 import { getKlineDataDongCai } from './api/data/kLine';
 
 onMounted(async () => {
-  tagLog("error", "测试行情数据", await getKlineDataDongCai({
+  tagLog("info", "测试行情数据", await getKlineDataDongCai({
     symbol: "601360",
     period: "daily",
     start_date: "20251201",

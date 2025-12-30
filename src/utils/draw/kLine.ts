@@ -1,38 +1,34 @@
 import { getKLineTrend, type kLineTrend } from '@/types/kLine'
 import type { KLineData } from '@/types/price'
+import { priceToY } from '../priceToY'
+import { tagLog } from '../logger'
 
-interface drawOption {
+export interface drawOption {
   kWidth: number
   kGap: number
-  /** 上下各留白像素 */
   yPaddingPx?: number
-}
-
-function priceToY(
-  price: number,
-  maxPrice: number,
-  minPrice: number,
-  canvasHeight: number,
-  paddingTop: number,
-  paddingBottom: number,
-): number {
-  const range = maxPrice - minPrice || 1
-  const ratio = (price - minPrice) / range
-
-  const viewHeight = Math.max(1, canvasHeight - paddingTop - paddingBottom)
-  return paddingTop + viewHeight * (1 - ratio)
 }
 
 const UP_COLOR = 'rgba(214, 10, 34, 1)'
 const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
 
-export function draw(
+/**
+ * K 线图绘制
+ * @param ctx
+ * @param data
+ * @param option
+ * @param logicHeight
+ * @param dpr
+ * @returns
+ */
+export function kLineDraw(
   ctx: CanvasRenderingContext2D,
   data: KLineData[],
   option: drawOption,
   logicHeight: number,
   dpr: number = 1,
 ) {
+  tagLog('info', 'kLineDraw', data)
   if (data.length === 0) return
 
   const height = logicHeight
@@ -45,8 +41,8 @@ export function draw(
   const paddingBottom = pad
 
   // 2) 价格范围（不再扩展，用像素留白来做空间）
-  const maxPrice = data.reduce((acc, cur) => Math.max(acc, cur.maxPrice), -Infinity)
-  const minPrice = data.reduce((acc, cur) => Math.min(acc, cur.minPrice), Infinity)
+  const maxPrice = data.reduce((acc, cur) => Math.max(acc, cur.high), -Infinity)
+  const minPrice = data.reduce((acc, cur) => Math.min(acc, cur.low), Infinity)
 
   ctx.lineWidth = 1 / dpr
 
@@ -56,13 +52,13 @@ export function draw(
     const e = data[i]
     if (!e) continue
 
-    const highY = priceToY(e.maxPrice, maxPrice, minPrice, height, paddingTop, paddingBottom)
-    const lowY = priceToY(e.minPrice, maxPrice, minPrice, height, paddingTop, paddingBottom)
+    const highY = priceToY(e.high, maxPrice, minPrice, height, paddingTop, paddingBottom)
+    const lowY = priceToY(e.low, maxPrice, minPrice, height, paddingTop, paddingBottom)
     const openY = priceToY(e.open, maxPrice, minPrice, height, paddingTop, paddingBottom)
     const closeY = priceToY(e.close, maxPrice, minPrice, height, paddingTop, paddingBottom)
 
     const rectY = Math.min(openY, closeY)
-    const rectHeight = Math.abs(openY - closeY) || 1
+    const rectHeight = Math.max(Math.abs(openY - closeY), 2 / dpr)
 
     const trend: kLineTrend = getKLineTrend(e)
 

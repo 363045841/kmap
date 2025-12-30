@@ -1,12 +1,13 @@
 import axios from 'axios'
+import { type KLineDailyDongCaiResponse } from '@/types/price'
 
 interface KLineDailyDongCaiRequest {
-  symbol: string // 股票代码，例如 '603777'
-  period: 'daily' | 'weekly' | 'monthly' // K 线周期类型，默认 'daily'
-  start_date: string // 查询起始日期，格式 'YYYYMMDD'，例如 '20210301'
-  end_date: string // 查询结束日期，格式 'YYYYMMDD'，例如 '20210616'
-  adjust?: 'qfq' | 'hfq' // 复权类型：qfq=前复权，hfq=后复权；未传则返回不复权数据
-  timeout?: number // 请求超时时间（秒）；未传则不设置超时
+  symbol: string
+  period: 'daily' | 'weekly' | 'monthly'
+  start_date: string
+  end_date: string
+  adjust?: 'qfq' | 'hfq'
+  timeout?: number
 }
 
 interface KLineDailyDongCaiResponseChinese {
@@ -24,45 +25,47 @@ interface KLineDailyDongCaiResponseChinese {
   换手率: number
 }
 
-export interface KLineDailyDongCaiResponse {
-  date: string // 交易日期，格式 'YYYY-MM-DD'
-  stockCode: string // 股票代码
-  open: number // 开盘价
-  close: number // 收盘价
-  high: number // 最高价
-  low: number // 最低价
-  volume: number // 成交量
-  turnover: number // 成交额
-  amplitude: number // 振幅（%）
-  changePercent: number // 涨跌幅（%）
-  changeAmount: number // 涨跌额
-  turnoverRate: number // 换手率（%）
-}
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
 const API_PATH = import.meta.env.VITE_API_PATH || '/api/public/stock_zh_a_hist'
 const url = `${BASE_URL}${API_PATH}`
 
-function formatDate(dateStr: string): string {
-  // 兼容多种格式，统一输出 'YYYY-MM-DD'
+function normalizeDateToYMD(dateStr: string): string {
+  // 统一成 'YYYY-MM-DD'
   if (/^\d{8}$/.test(dateStr)) {
-    // YYYYMMDD
     return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`
   }
   if (/^\d{4}-\d{2}-\d{2}T/.test(dateStr)) {
-    // YYYY-MM-DDTHH:mm:ss.sss
     return dateStr.slice(0, 10)
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    // YYYY-MM-DD
     return dateStr
   }
+  // 兜底：交给 Date 解析，但不保证所有格式都可靠
+  const d = new Date(dateStr)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
   return dateStr
 }
 
+/**
+ * 将 'YYYY-MM-DD' 转为“上海时区(UTC+8) 当天 00:00:00”的毫秒时间戳
+ * 这样无论代码运行在什么时区，都不会把交易日偏移到前/后一天。
+ */
+function ymdToShanghaiTimestamp(ymd: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd)
+  if (!m) throw new Error(`无法解析日期: ${ymd}`)
+  const year = Number(m[1])
+  const month = Number(m[2])
+  const day = Number(m[3])
+
+  // 上海 00:00 相当于 UTC 前一天 16:00
+  return Date.UTC(year, month - 1, day, 0 - 8, 0, 0, 0)
+}
+
 function mapChineseToEnglish(data: KLineDailyDongCaiResponseChinese): KLineDailyDongCaiResponse {
+  const ymd = normalizeDateToYMD(data.日期)
   return {
-    date: formatDate(data.日期),
+    timestamp: ymdToShanghaiTimestamp(ymd),
     stockCode: data.股票代码,
     open: data.开盘,
     close: data.收盘,
@@ -94,3 +97,5 @@ export async function getKlineDataDongCai(
     throw error
   }
 }
+
+export type { KLineDailyDongCaiResponse }

@@ -18,8 +18,8 @@ export function genRandomPriceData(count: number): KLineData[] {
     data.push({
       timestamp: i,
       open: open,
-      maxPrice: maxPrice,
-      minPrice: minPrice,
+      high: maxPrice,
+      low: minPrice,
       close: close,
     })
   }
@@ -29,10 +29,10 @@ export function genRandomPriceData(count: number): KLineData[] {
 
 export function reversalExampleData(): KLineData[] {
   return [
-    { timestamp: 0, open: 100, maxPrice: 101, minPrice: 97, close: 98 },
-    { timestamp: 1, open: 98, maxPrice: 99, minPrice: 94, close: 95 },
-    { timestamp: 2, open: 95, maxPrice: 96, minPrice: 92, close: 94 }, // 低点
-    { timestamp: 3, open: 94, maxPrice: 97, minPrice: 93, close: 96 }, // 开始反弹
-    { timestamp: 4, open: 96, maxPrice: 100, minPrice: 95, close: 99 }, // 继续反弹
+    { timestamp: 0, open: 100, high: 101, low: 97, close: 98 },
+    { timestamp: 1, open: 98, high: 99, low: 94, close: 95 },
+    { timestamp: 2, open: 95, high: 96, low: 92, close: 94 }, // 低点
+    { timestamp: 3, open: 94, high: 97, low: 93, close: 96 }, // 开始反弹
+    { timestamp: 4, open: 96, high: 100, low: 95, close: 99 }, // 继续反弹
   ]
 }
