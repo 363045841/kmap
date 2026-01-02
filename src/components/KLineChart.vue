@@ -9,6 +9,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { KLineData } from '@/types/price'
 import { kLineDraw } from '@/utils/draw/kLine'
 import { drawMA5Line, drawMA10Line, drawMA20Line } from '@/utils/draw/MA'
+import { tagLog } from '@/utils/logger'
 
 type MAFlags = {
   ma5?: boolean
@@ -62,7 +63,8 @@ function render() {
 
   const opt = option()
   const n = kdata.length
-  const contentWidth = Math.max(viewWidth, opt.kGap + n * (opt.kWidth + opt.kGap))
+  const contentWidth = Math.max(viewWidth, (opt.kGap + n * (opt.kWidth + opt.kGap)) / dpr)
+
 
   // 让容器能横向滚动：canvas 撑开内容宽度
   canvas.style.width = `${contentWidth}px`

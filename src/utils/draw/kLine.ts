@@ -28,7 +28,6 @@ export function kLineDraw(
   logicHeight: number,
   dpr: number = 1,
 ) {
-  tagLog('info', 'kLineDraw', data)
   if (data.length === 0) return
 
   const height = logicHeight
