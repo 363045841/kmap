@@ -1,159 +1,127 @@
-import type { KLineData } from "@/types/price"
-import type { drawOption, PriceRange } from "./kLine"
-import { priceToY } from "../priceToY"
+import type { KLineData } from '@/types/price'
+import { priceToY } from '../priceToY'
+import type { drawOption, PriceRange } from './kLine'
+import { alignToPhysicalPixelCenter } from './pixelAlign'
 
-const maCache = new Map<string, { dataLen: number; values: number[] }>()
-
-export function clearMACache() {
-    maCache.clear()
-}
-
-function calcMAx(data: KLineData[], period: number): number[] {
-    const cacheKey = `ma${period}`
-    const cached = maCache.get(cacheKey)
-
-    if (cached && cached.dataLen === data.length) {
-        return cached.values
-    }
-
-    const n = data.length
-    if (period <= 0 || n < period) {
-        maCache.set(cacheKey, { dataLen: n, values: [] })
-        return []
-    }
-
-    let windowSum = 0
-    for (let i = 0; i < period; i++) {
-        windowSum += data[i]!.close
-    }
-
-    const out: number[] = new Array(n - period + 1)
-    out[0] = windowSum / period
-
-    for (let i = period; i < n; i++) {
-        windowSum += data[i]!.close - data[i - period]!.close
-        out[i - period + 1] = windowSum / period
-    }
-
-    maCache.set(cacheKey, { dataLen: n, values: out })
-    return out
-}
+const MA5_COLOR = 'rgba(255, 193, 37, 1)'
+const MA10_COLOR = 'rgba(190, 131, 12, 1)'
+const MA20_COLOR = 'rgba(69, 112, 249, 1)'
 
 /**
- * 绘制MA线 - 仅可视范围
- * 调用前需已 ctx.translate(-scrollLeft, 0)
+ * 通用 MA 线绘制函数 - 逻辑像素坐标系
  */
 function drawMALine(
-    ctx: CanvasRenderingContext2D,
-    data: KLineData[],
-    option: drawOption,
-    logicHeight: number,
-    period: number,
-    color: string,
-    dpr: number = 1,
-    kStartIndex: number = 0,
-    kEndIndex: number = data.length,
-    priceRange?: PriceRange,
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number,
+  startIndex: number,
+  endIndex: number,
+  priceRange: PriceRange | undefined,
+  period: number,
+  color: string
 ) {
-    if (data.length === 0) return
+  if (data.length < period) return
 
-    const ma = calcMAx(data, period)
-    if (ma.length === 0) return
+  const height = logicHeight
 
-    const height = logicHeight
-    const wantPad = option.yPaddingPx ?? 0
-    const pad = Math.max(0, Math.min(wantPad, Math.floor(height / 2) - 1))
-    const paddingTop = pad
-    const paddingBottom = pad
+  const wantPad = option.yPaddingPx ?? 0
+  const pad = Math.max(0, Math.min(wantPad, Math.floor(height / 2) - 1))
+  const paddingTop = pad
+  const paddingBottom = pad
 
-    let maxPrice: number
-    let minPrice: number
+  // 计算价格范围
+  let maxPrice: number
+  let minPrice: number
 
-    if (priceRange) {
-        maxPrice = priceRange.maxPrice
-        minPrice = priceRange.minPrice
+  if (priceRange) {
+    maxPrice = priceRange.maxPrice
+    minPrice = priceRange.minPrice
+  } else {
+    maxPrice = -Infinity
+    minPrice = Infinity
+    for (let i = startIndex; i < endIndex && i < data.length; i++) {
+      const e = data[i]
+      if (e.high > maxPrice) maxPrice = e.high
+      if (e.low < minPrice) minPrice = e.low
+    }
+  }
+
+  if (!Number.isFinite(maxPrice) || !Number.isFinite(minPrice)) return
+
+  const unit = option.kWidth + option.kGap
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+
+  let isFirst = true
+  const drawStart = Math.max(startIndex, period - 1)
+
+  for (let i = drawStart; i < endIndex && i < data.length; i++) {
+    // 计算 MA 值
+    let sum = 0
+    for (let j = 0; j < period; j++) {
+      sum += data[i - j].close
+    }
+    const maValue = sum / period
+
+    // 计算逻辑像素坐标并对齐
+    const logicX = option.kGap + i * unit + option.kWidth / 2
+    const logicY = priceToY(maValue, maxPrice, minPrice, height, paddingTop, paddingBottom)
+
+    const x = alignToPhysicalPixelCenter(logicX, dpr)
+    const y = alignToPhysicalPixelCenter(logicY, dpr)
+
+    if (isFirst) {
+      ctx.moveTo(x, y)
+      isFirst = false
     } else {
-        maxPrice = -Infinity
-        minPrice = Infinity
-        for (let i = 0; i < data.length; i++) {
-            const e = data[i]
-            if (e.high > maxPrice) maxPrice = e.high
-            if (e.low < minPrice) minPrice = e.low
-        }
+      ctx.lineTo(x, y)
     }
+  }
 
-    if (!Number.isFinite(maxPrice) || !Number.isFinite(minPrice) || maxPrice <= minPrice) return
-
-    const unit = option.kWidth + option.kGap
-
-    const maStart = Math.max(0, kStartIndex - (period - 1))
-    const maEnd = Math.min(ma.length, kEndIndex - (period - 1) + 1)
-
-    if (maStart >= maEnd) return
-
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2 / dpr
-    ctx.beginPath()
-
-    let started = false
-
-    for (let i = maStart; i < maEnd; i++) {
-        const maValue = ma[i]
-        if (!Number.isFinite(maValue)) continue
-
-        const y = priceToY(maValue, maxPrice, minPrice, height, paddingTop, paddingBottom)
-        if (!Number.isFinite(y)) continue
-
-        const kIndex = i + (period - 1)
-        /* 直接用世界坐标 */
-        const x = option.kGap + kIndex * unit + option.kWidth / 2
-
-        if (!started) {
-            ctx.moveTo(x, y)
-            started = true
-        } else {
-            ctx.lineTo(x, y)
-        }
-    }
-
-    if (started) ctx.stroke()
+  ctx.stroke()
 }
 
 export function drawMA5Line(
-    ctx: CanvasRenderingContext2D,
-    data: KLineData[],
-    option: drawOption,
-    logicHeight: number,
-    dpr: number = 1,
-    kStartIndex: number = 0,
-    kEndIndex: number = data.length,
-    priceRange?: PriceRange,
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number = 1,
+  startIndex: number = 0,
+  endIndex: number = data.length,
+  priceRange?: PriceRange
 ) {
-    drawMALine(ctx, data, option, logicHeight, 5, "rgba(251, 186, 62, 1)", dpr, kStartIndex, kEndIndex, priceRange)
+  drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 5, MA5_COLOR)
 }
 
 export function drawMA10Line(
-    ctx: CanvasRenderingContext2D,
-    data: KLineData[],
-    option: drawOption,
-    logicHeight: number,
-    dpr: number = 1,
-    kStartIndex: number = 0,
-    kEndIndex: number = data.length,
-    priceRange?: PriceRange,
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number = 1,
+  startIndex: number = 0,
+  endIndex: number = data.length,
+  priceRange?: PriceRange
 ) {
-    drawMALine(ctx, data, option, logicHeight, 10, "rgba(190, 131, 12, 1)", dpr, kStartIndex, kEndIndex, priceRange)
+  drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 10, MA10_COLOR)
 }
 
 export function drawMA20Line(
-    ctx: CanvasRenderingContext2D,
-    data: KLineData[],
-    option: drawOption,
-    logicHeight: number,
-    dpr: number = 1,
-    kStartIndex: number = 0,
-    kEndIndex: number = data.length,
-    priceRange?: PriceRange,
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number = 1,
+  startIndex: number = 0,
+  endIndex: number = data.length,
+  priceRange?: PriceRange
 ) {
-    drawMALine(ctx, data, option, logicHeight, 20, "rgba(69, 112, 249, 1)", dpr, kStartIndex, kEndIndex, priceRange)
+  drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 20, MA20_COLOR)
 }

@@ -1,6 +1,12 @@
 import { getKLineTrend, type kLineTrend } from '@/types/kLine'
 import type { KLineData } from '@/types/price'
 import { priceToY } from '../priceToY'
+import {
+  roundToPhysicalPixel,
+  alignRect,
+  createVerticalLineRect,
+  createHorizontalLineRect,
+} from './pixelAlign'
 
 export interface drawOption {
   kWidth: number
@@ -17,8 +23,49 @@ const UP_COLOR = 'rgba(214, 10, 34, 1)'
 const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
 
 /**
- * K线图绘制 - 仅渲染指定索引范围
- * 调用前需已 ctx.translate(-scrollLeft, 0)
+ * 绘制价格标记
+ */
+function drawPriceMarker(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  price: number,
+  dpr: number
+) {
+  const text = price.toFixed(2)
+  const padding = 4
+  const lineLength = 20
+  const dotRadius = 2
+
+  // 使用填充矩形绘制水平引导线
+  const lineRect = createHorizontalLineRect(x, x + lineLength, y, dpr)
+  if (lineRect) {
+    ctx.fillStyle = '#666'
+    ctx.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height)
+  }
+
+  // 绘制线末小圆点
+  const endX = roundToPhysicalPixel(x + lineLength, dpr)
+  const alignedY = roundToPhysicalPixel(y, dpr)
+  ctx.fillStyle = '#666'
+  ctx.beginPath()
+  ctx.arc(endX, alignedY, dotRadius, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 绘制价格文字
+  ctx.font = '12px Arial'
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = '#333'
+  ctx.fillText(
+    text,
+    roundToPhysicalPixel(x + lineLength + padding, dpr),
+    roundToPhysicalPixel(y, dpr)
+  )
+}
+
+/**
+ * K线图绘制 - 影线固定为 1 物理像素宽
  */
 export function kLineDraw(
   ctx: CanvasRenderingContext2D,
@@ -28,7 +75,7 @@ export function kLineDraw(
   dpr: number = 1,
   startIndex: number = 0,
   endIndex: number = data.length,
-  priceRange?: PriceRange,
+  priceRange?: PriceRange
 ) {
   if (data.length === 0) return
 
@@ -39,53 +86,111 @@ export function kLineDraw(
   const paddingTop = pad
   const paddingBottom = pad
 
-  let maxPrice: number
-  let minPrice: number
+  const unit = option.kWidth + option.kGap
+
+  // 计算价格范围和极值索引
+  let visibleMaxPrice: number
+  let visibleMinPrice: number
+  let maxPriceIndex = startIndex
+  let minPriceIndex = startIndex
 
   if (priceRange) {
-    maxPrice = priceRange.maxPrice
-    minPrice = priceRange.minPrice
-  } else {
-    maxPrice = -Infinity
-    minPrice = Infinity
-    for (let i = 0; i < data.length; i++) {
+    visibleMaxPrice = priceRange.maxPrice
+    visibleMinPrice = priceRange.minPrice
+    for (let i = startIndex; i < endIndex && i < data.length; i++) {
       const e = data[i]
-      if (e.high > maxPrice) maxPrice = e.high
-      if (e.low < minPrice) minPrice = e.low
+      if (!e) continue
+      if (e.high >= visibleMaxPrice) {
+        visibleMaxPrice = e.high
+        maxPriceIndex = i
+      }
+      if (e.low <= visibleMinPrice) {
+        visibleMinPrice = e.low
+        minPriceIndex = i
+      }
+    }
+  } else {
+    visibleMaxPrice = -Infinity
+    visibleMinPrice = Infinity
+    for (let i = startIndex; i < endIndex && i < data.length; i++) {
+      const e = data[i]
+      if (!e) continue
+      if (e.high > visibleMaxPrice) {
+        visibleMaxPrice = e.high
+        maxPriceIndex = i
+      }
+      if (e.low < visibleMinPrice) {
+        visibleMinPrice = e.low
+        minPriceIndex = i
+      }
     }
   }
 
-  if (!Number.isFinite(maxPrice) || !Number.isFinite(minPrice)) return
-
-  const unit = option.kWidth + option.kGap
+  if (!Number.isFinite(visibleMaxPrice) || !Number.isFinite(visibleMinPrice)) return
 
   for (let i = startIndex; i < endIndex && i < data.length; i++) {
     const e = data[i]
     if (!e) continue
 
-    const highY = priceToY(e.high, maxPrice, minPrice, height, paddingTop, paddingBottom)
-    const lowY = priceToY(e.low, maxPrice, minPrice, height, paddingTop, paddingBottom)
-    const openY = priceToY(e.open, maxPrice, minPrice, height, paddingTop, paddingBottom)
-    const closeY = priceToY(e.close, maxPrice, minPrice, height, paddingTop, paddingBottom)
+    // 计算逻辑像素 Y 坐标
+    const highY = priceToY(e.high, visibleMaxPrice, visibleMinPrice, height, paddingTop, paddingBottom)
+    const lowY = priceToY(e.low, visibleMaxPrice, visibleMinPrice, height, paddingTop, paddingBottom)
+    const openY = priceToY(e.open, visibleMaxPrice, visibleMinPrice, height, paddingTop, paddingBottom)
+    const closeY = priceToY(e.close, visibleMaxPrice, visibleMinPrice, height, paddingTop, paddingBottom)
 
-    /* 直接用世界坐标，translate 已处理偏移 */
+    // 计算逻辑像素 X 坐标
     const rectX = option.kGap + i * unit
-    const rectY = Math.min(openY, closeY)
-    const rectHeight = Math.max(Math.abs(openY - closeY), 2 / dpr)
+    const rawRectY = Math.min(openY, closeY)
+    const rawRectHeight = Math.max(Math.abs(openY - closeY), 1)
+
+    // 对齐矩形到物理像素
+    const alignedRect = alignRect(rectX, rawRectY, option.kWidth, rawRectHeight, dpr)
 
     const trend: kLineTrend = getKLineTrend(e)
     const color = trend === 'up' ? UP_COLOR : DOWN_COLOR
 
+    // ===== 绘制实体 =====
     ctx.fillStyle = color
-    ctx.fillRect(rectX, rectY, option.kWidth, rectHeight)
+    ctx.fillRect(alignedRect.x, alignedRect.y, alignedRect.width, alignedRect.height)
 
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2 / dpr
-    const cx = rectX + option.kWidth / 2
+    // ===== 绘制影线（使用填充矩形，固定 1 物理像素宽）=====
+    const cx = rectX + option.kWidth / 2  // 影线中心 X（逻辑像素）
 
-    ctx.beginPath()
-    ctx.moveTo(cx, highY)
-    ctx.lineTo(cx, lowY)
-    ctx.stroke()
+    // 实体边界
+    const bodyTop = alignedRect.y
+    const bodyBottom = alignedRect.y + alignedRect.height
+
+    // 用实际价格判断是否存在影线
+    const bodyHigh = Math.max(e.open, e.close)
+    const bodyLow = Math.min(e.open, e.close)
+
+    // 设置影线颜色（重要！）
+    ctx.fillStyle = color
+
+    // 上影线
+    if (e.high > bodyHigh) {
+      const wickRect = createVerticalLineRect(cx, highY, bodyTop, dpr)
+      if (wickRect) {
+        ctx.fillRect(wickRect.x, wickRect.y, wickRect.width, wickRect.height)
+      }
+    }
+
+    // 下影线
+    if (e.low < bodyLow) {
+      const wickRect = createVerticalLineRect(cx, bodyBottom, lowY, dpr)
+      if (wickRect) {
+        ctx.fillRect(wickRect.x, wickRect.y, wickRect.width, wickRect.height)
+      }
+    }
+
+    // 绘制最高价标记
+    if (i === maxPriceIndex) {
+      drawPriceMarker(ctx, cx, highY, visibleMaxPrice, 'high', dpr)
+    }
+
+    // 绘制最低价标记
+    if (i === minPriceIndex) {
+      drawPriceMarker(ctx, cx, lowY, visibleMinPrice, 'low', dpr)
+    }
   }
 }
