@@ -1,19 +1,14 @@
 export interface KLineData {
   /* 时间戳（毫秒） */
   timestamp: number
-
   /* 开盘价 */
   open: number
-
   /* 最高价 */
   high: number
-
   /* 最低价 */
   low: number
-
   /* 收盘价 */
   close: number
-
   /** 股票代码（东财等数据源会提供） */
   stockCode?: string
   /** 成交量 */
