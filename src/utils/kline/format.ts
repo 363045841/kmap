@@ -1,5 +1,8 @@
 import type { KLineData } from '@/types/price'
 
+// 重新导出日期格式化函数以保持向后兼容
+export { formatShanghaiDate } from '@/utils/dateFormat'
+
 export const UP_COLOR = 'rgba(214, 10, 34, 1)'
 export const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
 export const NEUTRAL_COLOR = 'rgba(0, 0, 0, 0.78)'
@@ -31,25 +34,6 @@ export function formatPercent(n: number, digits = 2): string {
 export function formatSignedPercent(n: number, digits = 2): string {
     const sign = n > 0 ? '+' : ''
     return `${sign}${n.toFixed(digits)}%`
-}
-
-/**
- * timestamp 是“上海时区当天 00:00:00”映射到 UTC 的值；显示时强制按上海时区格式化
- */
-export function formatShanghaiDate(ts: number): string {
-    const parts = new Intl.DateTimeFormat('zh-CN', {
-        timeZone: 'Asia/Shanghai',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    })
-        .formatToParts(new Date(ts))
-        .reduce<Record<string, string>>((acc, p) => {
-            if (p.type !== 'literal') acc[p.type] = p.value
-            return acc
-        }, {})
-
-    return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 export function calcOpenColor(k: KLineData, prev?: KLineData): string {

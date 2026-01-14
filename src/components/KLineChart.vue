@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef, watchEffect } from 'vue'
 import type { KLineData } from '@/types/price'
 import KLineTooltip from './KLineTooltip.vue'
 import { Chart, type PaneSpec } from '@/core/chart'
@@ -65,7 +65,7 @@ const props = withDefaults(
   {
     kWidth: 10,
     kGap: 2,
-    yPaddingPx: 40,
+    yPaddingPx: 0,
     showMA: () => ({ ma5: true, ma10: true, ma20: true }),
     autoScrollToRight: true,
     minKWidth: 2,
@@ -73,7 +73,7 @@ const props = withDefaults(
     rightAxisWidth: 70,
     bottomAxisHeight: 24,
 
-    paneRatios: () => [0.85, 0.15],
+    paneRatios: () => [0.75, 0.25],
   },
 )
 
@@ -234,7 +234,7 @@ onMounted(() => {
       panes,
 
       // 主/副图之间真实留白，形成视觉断开
-      paneGap: 8,
+      paneGap: 0,
     },
   )
 

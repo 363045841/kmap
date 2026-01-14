@@ -7,33 +7,7 @@ import {
     createVerticalLineRect,
     roundToPhysicalPixel,
 } from './pixelAlign'
-
-function formatDate(ts: number): string {
-    const d = new Date(ts)
-    const mm = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    return `${mm}-${dd}`
-}
-
-function formatMonthOrYear(ts: number): { text: string; isYear: boolean } {
-    const d = new Date(ts)
-    const year = d.getFullYear()
-    const month = d.getMonth() + 1
-    // 当年 1 月：直接标注年份；其它月份：标注月份（不带日期）
-    if (month === 1) return { text: String(year), isYear: true }
-    return { text: String(month).padStart(2, '0'), isYear: false }
-}
-
-function dayKey(ts: number): string {
-    const d = new Date(ts)
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-}
-
-function monthKey(ts: number): string {
-    const d = new Date(ts)
-    // month is 0-based
-    return `${d.getFullYear()}-${d.getMonth()}`
-}
+import { formatMonthOrYear, monthKey } from '@/utils/dateFormat'
 
 export interface GridOption {
     /** 网格线颜色 */
@@ -119,8 +93,8 @@ export function drawGridLayer(
     const step = range === 0 ? 0 : range / (priceTicks - 1)
 
     for (let t = 0; t < priceTicks; t++) {
-        const p = range === 0 ? maxPrice : maxPrice - step * t
-        const y = priceToY(p, maxPrice, minPrice, height, paddingTop, paddingBottom)
+        const price = range === 0 ? maxPrice : maxPrice - step * t
+        const y = priceToY(price, maxPrice, minPrice, height, paddingTop, paddingBottom)
 
         // 横线不要画到日期区域之下
         if (y > plotBottomY) continue
@@ -131,7 +105,7 @@ export function drawGridLayer(
         // 右侧价格文字
         ctx.fillStyle = textColor
         ctx.fillText(
-            p.toFixed(2),
+            price.toFixed(2),
             roundToPhysicalPixel(rightTextX, dpr),
             roundToPhysicalPixel(y, dpr)
         )

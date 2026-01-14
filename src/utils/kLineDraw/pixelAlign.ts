@@ -69,6 +69,15 @@ export function createVerticalLineRect(
 
 /**
  * 创建用于绘制水平线的矩形（1 物理像素高）
+ * 所有坐标都对齐到物理像素边界，避免亚像素模糊
+ * 
+ * @param x1 - 水平线起始点的 X 坐标（逻辑像素）
+ * @param x2 - 水平线结束点的 X 坐标（逻辑像素）
+ * @param centerY - 水平线中心 Y 坐标（逻辑像素）
+ * @param dpr - 设备像素比，用于将逻辑像素转换为物理像素
+ * @returns 返回对齐到物理像素的矩形信息，如果 x1 和 x2 相等则返回 null
+ *          返回对象包含 x, y, width, height 属性，单位均为逻辑像素
+ *          高度(height)始终为 1/dpr（即 1 物理像素的高度）
  */
 export function createHorizontalLineRect(
   x1: number,

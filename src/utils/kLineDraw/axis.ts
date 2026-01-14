@@ -1,7 +1,7 @@
 import type { KLineData } from '@/types/price'
 import { priceToY, yToPrice } from '../priceToY'
 import { alignToPhysicalPixelCenter, roundToPhysicalPixel } from './pixelAlign'
-import { tagLog } from '../logger'
+import { formatYMDShanghai, formatMonthOrYear, monthKey } from '@/utils/dateFormat'
 
 export interface PriceAxisOptions {
     x: number
@@ -67,17 +67,12 @@ export function drawPriceAxis(ctx: CanvasRenderingContext2D, opts: PriceAxisOpti
         const p = range === 0 ? maxPrice : maxPrice - step * i
         // 统一对 y 做一次四舍五入，减少与 gridLines 的 1px 级误差
         const yy = Math.round(priceToY(p, maxPrice, minPrice, height, pad, pad) + y)
-        tagLog(
-            'axis',
-            {
-                p, maxPrice, minPrice, height, pad, "pad2": pad, yy, "text": p.toFixed(2)
-            },
-        )
 
         // 刻度短线
         ctx.strokeStyle = lineColor
         ctx.beginPath()
         const lineY = alignToPhysicalPixelCenter(yy, dpr)
+
         ctx.moveTo(x, lineY)
         ctx.lineTo(x + 4, lineY)
         ctx.stroke()
@@ -164,25 +159,8 @@ export interface CrosshairTimeLabelOptions {
     paddingY?: number
 }
 
-function formatYMDShanghai(ts: number): string {
-    // 按上海时区格式化，避免不同时区出现日期偏移
-    const parts = new Intl.DateTimeFormat('zh-CN', {
-        timeZone: 'Asia/Shanghai',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    })
-        .formatToParts(new Date(ts))
-        .reduce<Record<string, string>>((acc, p) => {
-            if (p.type !== 'literal') acc[p.type] = p.value
-            return acc
-        }, {})
-
-    return `${parts.year}-${parts.month}-${parts.day}`
-}
-
 /**
- * 在底部时间轴上绘制“十字线日期标签”
+ * 在底部时间轴上绘制"十字线日期标签"
  * 说明：该函数假设时间轴背景/刻度已绘制完（即 drawTimeAxis 之后调用）。
  */
 export function drawCrosshairTimeLabel(ctx: CanvasRenderingContext2D, opts: CrosshairTimeLabelOptions) {
@@ -233,7 +211,7 @@ export function drawCrosshairTimeLabel(ctx: CanvasRenderingContext2D, opts: Cros
 }
 
 /**
- * 在右侧价格轴上绘制“十字线价格标签”
+ * 在右侧价格轴上绘制"十字线价格标签"
  * 说明：该函数假设价格轴背景/刻度已绘制完（即 drawPriceAxis 之后调用）。
  */
 export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: CrosshairPriceLabelOptions) {
@@ -285,7 +263,7 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
     ctx.restore()
 }
 
-/** 绘制“最新价水平虚线”（画在 plotCanvas 的 world 坐标系：需在 translate(-scrollLeft,0) 之后调用） */
+/** 绘制"最新价水平虚线"（画在 plotCanvas 的 world 坐标系：需在 translate(-scrollLeft,0) 之后调用） */
 export function drawLastPriceDashedLine(ctx: CanvasRenderingContext2D, opts: LastPriceLineOptions) {
     const {
         plotWidth,
@@ -308,6 +286,10 @@ export function drawLastPriceDashedLine(ctx: CanvasRenderingContext2D, opts: Las
     const pad = Math.max(0, Math.min(yPaddingPx, Math.floor(plotHeight / 2) - 1))
     const y = priceToY(lastPrice, maxPrice, minPrice, plotHeight, pad, pad)
 
+
+
+
+
     const unit = kWidth + kGap
     const startX = kGap + startIndex * unit
     const endX = kGap + endIndex * unit
@@ -323,19 +305,6 @@ export function drawLastPriceDashedLine(ctx: CanvasRenderingContext2D, opts: Las
     ctx.stroke()
     ctx.setLineDash([])
     ctx.restore()
-}
-
-function monthKey(ts: number): string {
-    const d = new Date(ts)
-    return `${d.getFullYear()}-${d.getMonth()}`
-}
-
-function formatMonthOrYear(ts: number): { text: string; isYear: boolean } {
-    const d = new Date(ts)
-    const year = d.getFullYear()
-    const month = d.getMonth() + 1
-    if (month === 1) return { text: String(year), isYear: true }
-    return { text: String(month).padStart(2, '0'), isYear: false }
 }
 
 /** 底部时间轴（X方向随 scrollLeft 变化） */

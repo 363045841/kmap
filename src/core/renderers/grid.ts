@@ -24,4 +24,3 @@ export const GridRenderer: PaneRenderer = {
         ctx.restore()
     },
 }
-

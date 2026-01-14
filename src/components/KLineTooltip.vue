@@ -38,12 +38,12 @@ import {
     calcCloseColor,
     calcOpenColor,
     formatPercent,
-    formatShanghaiDate,
     formatSignedNumber,
     formatSignedPercent,
     formatWanYi,
     NEUTRAL_COLOR,
 } from '@/utils/kline/format'
+import { formatShanghaiDate } from '@/utils/dateFormat'
 
 const props = defineProps<{
     k: KLineData | null

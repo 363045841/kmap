@@ -27,6 +27,14 @@ export class PriceScale {
         return this.range
     }
 
+    getPaddingTop(): number {
+        return this.paddingTop
+    }
+
+    getPaddingBottom(): number {
+        return this.paddingBottom
+    }
+
     priceToY(price: number): number {
         const { maxPrice, minPrice } = this.range
         const range = maxPrice - minPrice || 1

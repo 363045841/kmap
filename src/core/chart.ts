@@ -183,14 +183,17 @@ export class Chart {
      * 5) 画 overlay（十字线、图例、边框等）
      */
     draw() {
+        // 1. 计算视口信息
         const vp = this.computeViewport()
         if (!vp) return
 
+        // 2. 获取三层 Canvas 上下文
         const plotCtx = this.dom.plotCanvas.getContext('2d')
         const yAxisCtx = this.dom.yAxisCanvas.getContext('2d')
         const xAxisCtx = this.dom.xAxisCanvas.getContext('2d')
         if (!plotCtx || !yAxisCtx || !xAxisCtx) return
 
+        // 3. 清空 Canvas + 设置 DPR 缩放
         plotCtx.setTransform(1, 0, 0, 1, 0, 0)
         plotCtx.scale(vp.dpr, vp.dpr)
         plotCtx.clearRect(0, 0, vp.plotWidth, vp.plotHeight)
@@ -199,6 +202,7 @@ export class Chart {
         yAxisCtx.scale(vp.dpr, vp.dpr)
         yAxisCtx.clearRect(0, 0, this.opt.rightAxisWidth, vp.plotHeight)
 
+        // 4. 计算可视数据范围
         const { start, end } = getVisibleRange(
             vp.scrollLeft,
             vp.plotWidth,
@@ -209,10 +213,12 @@ export class Chart {
 
         const range: VisibleRange = { start, end }
 
+        // 5. 遍历所有 Pane（主图 + 副图）
         for (const p of this.panes) {
+            // 5.1 更新 Pane 的价格范围
             p.updateRange(this.data, range)
 
-            // plot（每个 pane 画在 plotCanvas 上，按 pane.top clip+translate）
+            // 5.2 绘制 plot 层（渲染器链：网格线 → K线 → MA）
             plotCtx.save()
             plotCtx.beginPath()
             plotCtx.rect(0, p.top, vp.plotWidth, p.height)
@@ -232,7 +238,7 @@ export class Chart {
             }
             plotCtx.restore()
 
-            // yAxis：每个 pane 画一段（分段显示）
+            // 5.3 绘制 yAxis 刻度（每个 Pane 独立绘制一段）
             createYAxisRenderer({
                 axisX: 0,
                 axisWidth: this.opt.rightAxisWidth,
@@ -249,7 +255,7 @@ export class Chart {
                 dpr: vp.dpr,
             })
 
-            // 十字线价格标签（画在 y-axis-canvas，避免 plotCanvas 重复）
+            // 5.4 绘制十字线价格标签（画在 y-axis-canvas，避免 plotCanvas 重复）
             if (this.interaction.crosshairPos && this.interaction.activePaneId === p.id) {
                 drawCrosshairPriceLabelForPane({
                     ctx: yAxisCtx,
@@ -262,7 +268,7 @@ export class Chart {
             }
         }
 
-        // 只保留绘图区域（plotCanvas）整体外框：其他地方不画边线
+        // 6. 绘制 Pane 边框（整体外框）
         drawPaneBorders({
             ctx: plotCtx,
             dpr: vp.dpr,
@@ -270,7 +276,7 @@ export class Chart {
             panes: [{ top: 0, height: vp.plotHeight }],
         })
 
-        // 副图标题（plot 层）
+        // 7. 绘制副图标题（plot 层）
         const subPane = this.panes.find((p) => p.id === 'sub')
         if (subPane) {
             drawPaneTitle({
@@ -283,7 +289,7 @@ export class Chart {
 
         // yAxis 区域不绘制边框/分隔线：只保留绘图区域（plot）四周边线
 
-        // ===== xAxis（全局，底部一条） =====
+        // 8. 绘制 xAxis 时间轴（全局，底部一条）
         drawTimeAxisLayer({
             ctx: xAxisCtx,
             data: this.data,
@@ -299,7 +305,7 @@ export class Chart {
                     : null,
         })
 
-        // ===== 十字线（屏幕坐标系绘制在 plotCanvas 最上层） =====
+        // 9. 绘制十字线（屏幕坐标系绘制在 plotCanvas 最上层）
         if (this.interaction.crosshairPos) {
             plotCtx.save()
             plotCtx.beginPath()
@@ -316,7 +322,7 @@ export class Chart {
             plotCtx.restore()
         }
 
-        // ===== MA 图例（屏幕坐标系绘制，不参与 scrollLeft） =====
+        // 10. 绘制 MA 图例（屏幕坐标系绘制，不参与 scrollLeft）
         // 先临时读取 main pane 的开关：由外部 renderer 传入 showMA 后，legend 才有意义。
         // 当前 showMA 由 KLineChart.vue 负责决定是否接入 MA renderer，因此这里默认都显示。
         drawMALegend({
