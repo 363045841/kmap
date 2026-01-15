@@ -5,6 +5,7 @@ import { MA10_COLOR, MA20_COLOR, MA5_COLOR } from '@/utils/kLineDraw/MA'
 
 export function drawMALegend(args: {
     ctx: CanvasRenderingContext2D
+    yPaddingPx: number
     data: KLineData[]
     endIndex: number
     showMA: MAFlags
@@ -13,14 +14,14 @@ export function drawMALegend(args: {
     const { ctx, data, endIndex, showMA } = args
     if (!data.length) return
 
-    const legendX = 8
-    const legendY = 8
+    const legendX = 12
     const fontSize = 12
+    // 垂直居中渲染
+    const legendY = (fontSize + args.yPaddingPx) / 2
     const gap = 10
 
     ctx.save()
     ctx.font = `${fontSize}px Arial`
-    ctx.textBaseline = 'top'
     ctx.textAlign = 'left'
 
     const lastIndex = Math.min(endIndex - 1, data.length - 1)
@@ -31,24 +32,8 @@ export function drawMALegend(args: {
     if (showMA.ma20) items.push({ label: 'MA20', color: MA20_COLOR, value: calcMAAtIndex(data, lastIndex, 20) })
 
     if (items.length > 0) {
-        const paddingX = 8
-        const paddingY = 6
-
-        let contentWidth = ctx.measureText('均线').width + gap
-        for (const it of items) {
-            const valText = typeof it.value === 'number' ? ` ${it.value.toFixed(2)}` : ''
-            contentWidth += ctx.measureText(`${it.label}${valText}`).width + gap
-        }
-        contentWidth -= gap
-
-        const bgW = Math.ceil(contentWidth + paddingX * 2)
-        const bgH = Math.ceil(fontSize + paddingY * 2)
-
-        ctx.fillStyle = 'rgba(255,255,255,0.85)'
-        ctx.fillRect(legendX, legendY, bgW, bgH)
-
-        let x = legendX + paddingX
-        const y = legendY + paddingY
+        let x = legendX
+        const y = legendY
 
         ctx.fillStyle = '#333'
         ctx.fillText('均线', x, y)
@@ -65,4 +50,3 @@ export function drawMALegend(args: {
 
     ctx.restore()
 }
-

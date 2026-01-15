@@ -1,10 +1,21 @@
 <template>
   <!-- 外层 wrapper 负责在父容器中居中整个图表 -->
   <div class="chart-wrapper">
-    <div class="chart-container" :class="{ 'is-dragging': isDragging }" ref="containerRef" @scroll.passive="onScroll"
-      @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseLeave"
-      @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointerleave="onPointerLeave"
-      @wheel.prevent="onWheel">
+    <div
+      class="chart-container"
+      :class="{ 'is-dragging': isDragging }"
+      ref="containerRef"
+      @scroll.passive="onScroll"
+      @mousedown="onMouseDown"
+      @mousemove="onMouseMove"
+      @mouseup="onMouseUp"
+      @mouseleave="onMouseLeave"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointerleave="onPointerLeave"
+      @wheel.prevent="onWheel"
+    >
       <!-- scroll-content 负责撑开横向滚动宽度，并承载 sticky 的画布层 -->
       <div class="scroll-content" :style="{ width: totalWidth + 'px' }">
         <!-- 画布层：sticky 固定在可视区域左上角，滚动只影响绘制时的 scrollLeft -->
@@ -19,8 +30,14 @@
           <canvas class="x-axis-canvas" ref="xAxisCanvasRef"></canvas>
 
           <!-- 悬浮浮窗：放在 sticky 的 canvas-layer 内，避免随 scroll-content 横向滚动而偏移 -->
-          <KLineTooltip v-if="hovered" :k="hovered" :index="hoveredIndex" :data="props.data" :pos="tooltipPos"
-            :set-el="setTooltipEl" />
+          <KLineTooltip
+            v-if="hovered"
+            :k="hovered"
+            :index="hoveredIndex"
+            :data="props.data"
+            :pos="tooltipPos"
+            :set-el="setTooltipEl"
+          />
         </div>
       </div>
     </div>
@@ -28,7 +45,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef, watchEffect } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onUnmounted,
+  watch,
+  nextTick,
+  shallowRef,
+  watchEffect,
+} from 'vue'
 import type { KLineData } from '@/types/price'
 import KLineTooltip from './KLineTooltip.vue'
 import { Chart, type PaneSpec } from '@/core/chart'
@@ -273,8 +299,8 @@ onMounted(() => {
   const onResize = () => chart.resize()
   window.addEventListener('resize', onResize, { passive: true })
 
-    // 绑定到实例上，unmount 时移除（通过闭包变量）
-    ; (chart as any).__onResize = onResize
+  // 绑定到实例上，unmount 时移除（通过闭包变量）
+  ;(chart as any).__onResize = onResize
 })
 
 onUnmounted(() => {

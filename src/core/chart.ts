@@ -328,6 +328,7 @@ export class Chart {
         drawMALegend({
             ctx: plotCtx,
             data: this.data,
+            yPaddingPx: this.opt.yPaddingPx,
             endIndex: range.end,
             showMA: { ma5: true, ma10: true, ma20: true },
             dpr: vp.dpr,

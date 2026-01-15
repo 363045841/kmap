@@ -1,6 +1,12 @@
 <template>
-  <KLineChart :data="kdata" :kWidth="10" :kGap="2" :yPaddingPx="25" :showMA="{ ma5: true, ma10: true, ma20: true }"
-    :autoScrollToRight="true" />
+  <KLineChart
+    :data="kdata"
+    :kWidth="10"
+    :kGap="2"
+    :yPaddingPx="24"
+    :showMA="{ ma5: true, ma10: true, ma20: true }"
+    :autoScrollToRight="true"
+  />
 </template>
 
 <script setup lang="ts">
