@@ -22,7 +22,7 @@ onMounted(async () => {
     end_date: nowdate,
     adjust: 'qfq',
   })
-  kdata.value = toKLineData(raw) // 这里就排序好
+  kdata.value = toKLineData(raw)
 })
 </script>
 

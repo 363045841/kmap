@@ -16,7 +16,7 @@ export const CandleRenderer: PaneRenderer = {
         const unit = kWidth + kGap
 
         ctx.save()
-        // world 坐标：对齐 useKLineRenderer 的做法
+        // world 坐标：平移以实现横向滚动效果
         ctx.translate(-scrollLeft, 0)
 
         for (let i = range.start; i < range.end && i < data.length; i++) {
