@@ -20,13 +20,9 @@
       <div class="scroll-content" :style="{ width: totalWidth + 'px' }">
         <!-- 画布层：sticky 固定在可视区域左上角，滚动只影响绘制时的 scrollLeft -->
         <div class="canvas-layer" ref="canvasLayerRef">
-          <!-- 1) 绘图区：K线 + MA + 网格线（随 scrollLeft 平移） -->
-          <canvas class="plot-canvas" ref="plotCanvasRef"></canvas>
+          <!-- plotCanvas 和 yAxisCanvas 由 Chart 自动创建 -->
 
-          <!-- 2) 右侧价格轴（固定，不随滚动） -->
-          <canvas class="y-axis-canvas" ref="yAxisCanvasRef"></canvas>
-
-          <!-- 3) 底部时间轴（随 X 滚动，但画布不移动） -->
+          <!-- 底部时间轴（随 X 滚动，但画布不移动） -->
           <canvas class="x-axis-canvas" ref="xAxisCanvasRef"></canvas>
 
           <!-- 悬浮浮窗：放在 sticky 的 canvas-layer 内，避免随 scroll-content 横向滚动而偏移 -->
@@ -105,8 +101,6 @@ const props = withDefaults(
   },
 )
 
-const plotCanvasRef = ref<HTMLCanvasElement | null>(null)
-const yAxisCanvasRef = ref<HTMLCanvasElement | null>(null)
 const xAxisCanvasRef = ref<HTMLCanvasElement | null>(null)
 const canvasLayerRef = ref<HTMLDivElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -265,10 +259,8 @@ defineExpose({ scheduleRender, scrollToRight })
 onMounted(() => {
   const container = containerRef.value
   const canvasLayer = canvasLayerRef.value
-  const plotCanvas = plotCanvasRef.value
-  const yAxisCanvas = yAxisCanvasRef.value
   const xAxisCanvas = xAxisCanvasRef.value
-  if (!container || !canvasLayer || !plotCanvas || !yAxisCanvas || !xAxisCanvas) return
+  if (!container || !canvasLayer || !xAxisCanvas) return
 
   const panes: PaneSpec[] = [
     { id: 'main', ratio: props.paneRatios[0] },
@@ -276,7 +268,7 @@ onMounted(() => {
   ]
 
   const chart = new Chart(
-    { container, canvasLayer, plotCanvas, yAxisCanvas, xAxisCanvas },
+    { container, canvasLayer, xAxisCanvas },
     {
       kWidth: currentKWidth.value,
       kGap: currentKGap.value,

@@ -26,7 +26,7 @@ export function drawPaneBorders(args: {
 
     ctx.save()
     ctx.strokeStyle = color
-    ctx.lineWidth = 1
+    ctx.lineWidth = 20
 
     const x1 = alignToPhysicalPixelCenter(0, dpr)
     const x2 = alignToPhysicalPixelCenter(width, dpr)

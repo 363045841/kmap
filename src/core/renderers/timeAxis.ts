@@ -32,6 +32,8 @@ export function drawTimeAxisLayer(args: {
         startIndex,
         endIndex,
         dpr,
+        drawTopBorder: false, // 不绘制顶部边框，避免与主图底边框重叠
+        drawBottomBorder: false, // 不绘制底部边框，避免与副图下边框重叠
     })
 
     if (crosshair && typeof crosshair.index === 'number') {

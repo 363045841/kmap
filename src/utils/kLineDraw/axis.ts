@@ -17,6 +17,10 @@ export interface PriceAxisOptions {
     lineColor?: string
     fontSize?: number
     paddingX?: number
+    /** 是否绘制左侧边界竖线（默认 true） */
+    drawLeftBorder?: boolean
+    /** 是否绘制刻度短线（默认 true） */
+    drawTickLines?: boolean
 }
 
 /** 右侧价格轴（固定，不随 translate/scroll 变化） */
@@ -35,6 +39,8 @@ export function drawPriceAxis(ctx: CanvasRenderingContext2D, opts: PriceAxisOpti
         lineColor = 'rgba(0,0,0,0.12)',
         fontSize = 16,
         paddingX = 12,
+        drawLeftBorder = true,
+        drawTickLines = true,
     } = opts
 
     const wantPad = yPaddingPx
@@ -49,12 +55,14 @@ export function drawPriceAxis(ctx: CanvasRenderingContext2D, opts: PriceAxisOpti
     ctx.fillRect(x, y, width, height)
 
     // 左边界线
-    ctx.strokeStyle = lineColor
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(alignToPhysicalPixelCenter(x, dpr), y)
-    ctx.lineTo(alignToPhysicalPixelCenter(x, dpr), y + height)
-    ctx.stroke()
+    if (drawLeftBorder) {
+        ctx.strokeStyle = lineColor
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(alignToPhysicalPixelCenter(x, dpr), y)
+        ctx.lineTo(alignToPhysicalPixelCenter(x, dpr), y + height)
+        ctx.stroke()
+    }
 
     ctx.font = `${fontSize}px -apple-system,BlinkMacSystemFont,Trebuchet MS,Roboto,Ubuntu,sans-serif`
     ctx.textBaseline = 'middle'
@@ -69,13 +77,15 @@ export function drawPriceAxis(ctx: CanvasRenderingContext2D, opts: PriceAxisOpti
         const yy = Math.round(priceToY(p, maxPrice, minPrice, height, pad, pad) + y)
 
         // 刻度短线
-        ctx.strokeStyle = lineColor
-        ctx.beginPath()
-        const lineY = alignToPhysicalPixelCenter(yy, dpr)
+        if (drawTickLines) {
+            ctx.strokeStyle = lineColor
+            ctx.beginPath()
+            const lineY = alignToPhysicalPixelCenter(yy, dpr)
 
-        ctx.moveTo(x, lineY)
-        ctx.lineTo(x + 4, lineY)
-        ctx.stroke()
+            ctx.moveTo(x, lineY)
+            ctx.lineTo(x + 4, lineY)
+            ctx.stroke()
+        }
 
         // 文字
         ctx.fillStyle = textColor
@@ -101,6 +111,10 @@ export interface TimeAxisOptions {
     fontSize?: number
     /** 左右内边距（逻辑像素），避免月份/年份文字贴边 */
     paddingX?: number
+    /** 是否绘制顶部边界线（默认 true，如果主图已有底边框则设为 false 避免重复） */
+    drawTopBorder?: boolean
+    /** 是否绘制底部边界线（默认 true，如果副图已有下边框则设为 false 避免重复） */
+    drawBottomBorder?: boolean
 }
 
 export interface LastPriceLineOptions {
@@ -286,10 +300,6 @@ export function drawLastPriceDashedLine(ctx: CanvasRenderingContext2D, opts: Las
     const pad = Math.max(0, Math.min(yPaddingPx, Math.floor(plotHeight / 2) - 1))
     const y = priceToY(lastPrice, maxPrice, minPrice, plotHeight, pad, pad)
 
-
-
-
-
     const unit = kWidth + kGap
     const startX = kGap + startIndex * unit
     const endX = kGap + endIndex * unit
@@ -326,6 +336,8 @@ export function drawTimeAxis(ctx: CanvasRenderingContext2D, opts: TimeAxisOption
         lineColor = 'rgba(0,0,0,0.12)',
         fontSize = 16,
         paddingX = 12,
+        drawTopBorder = true,
+        drawBottomBorder = true,
     } = opts
 
     const unit = kWidth + kGap
@@ -334,13 +346,25 @@ export function drawTimeAxis(ctx: CanvasRenderingContext2D, opts: TimeAxisOption
     ctx.fillStyle = bgColor
     ctx.fillRect(x, y, width, height)
 
-    // 上边界线
-    ctx.strokeStyle = lineColor
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(x, alignToPhysicalPixelCenter(y, dpr))
-    ctx.lineTo(x + width, alignToPhysicalPixelCenter(y, dpr))
-    ctx.stroke()
+    // 上边界线（如果主图已有底边框则不绘制）
+    if (drawTopBorder) {
+        ctx.strokeStyle = lineColor
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x, alignToPhysicalPixelCenter(y, dpr))
+        ctx.lineTo(x + width, alignToPhysicalPixelCenter(y, dpr))
+        ctx.stroke()
+    }
+
+    // 下边界线（如果副图已有下边框则不绘制）
+    if (drawBottomBorder) {
+        ctx.strokeStyle = lineColor
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x, alignToPhysicalPixelCenter(y + height, dpr))
+        ctx.lineTo(x + width, alignToPhysicalPixelCenter(y + height, dpr))
+        ctx.stroke()
+    }
 
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'

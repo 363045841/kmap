@@ -23,6 +23,8 @@ export function createYAxisRenderer(opts: {
                 yPaddingPx: opts.yPaddingPx,
                 dpr,
                 ticks,
+                drawLeftBorder: false, // 不绘制左侧边界竖线
+                drawTickLines: false, // 不绘制刻度短线
             })
         },
     }

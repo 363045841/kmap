@@ -2,23 +2,23 @@ import type { KLineData } from '@/types/price'
 import { getVisibleRange } from '@/core/viewport/viewport'
 import { Pane, type VisibleRange } from '@/core/layout/pane'
 import { InteractionController } from '@/core/controller/interaction'
-import { createYAxisRenderer } from '@/core/renderers/yAxis'
+import { PaneRenderer } from '@/core/paneRenderer'
 import { drawTimeAxisLayer } from '@/core/renderers/timeAxis'
 import { drawCrosshair } from '@/core/renderers/crosshair'
-import { drawCrosshairPriceLabelForPane } from '@/core/renderers/crosshairLabels'
 import { drawMALegend } from '@/core/renderers/maLegend'
-import { drawPaneTitle } from '@/core/renderers/paneTitle'
-import { drawPaneBorders } from '@/core/renderers/paneBorder'
 
 export type ChartDom = {
     container: HTMLDivElement
     canvasLayer: HTMLDivElement
-    plotCanvas: HTMLCanvasElement
-    yAxisCanvas: HTMLCanvasElement
     xAxisCanvas: HTMLCanvasElement
 }
 
 export type PaneSpec = { id: string; ratio: number }
+
+export type PaneRendererDom = {
+    plotCanvas: HTMLCanvasElement
+    yAxisCanvas: HTMLCanvasElement
+}
 
 export type ChartOptions = {
     kWidth: number
@@ -51,7 +51,7 @@ export class Chart {
     private raf: number | null = null
     private viewport: Viewport | null = null
 
-    private panes: Pane[] = []
+    private paneRenderers: PaneRenderer[] = []
     readonly interaction: InteractionController
 
     // 缩放回调：用于通知外部（Vue）同步 kWidth/kGap 与 scrollLeft
@@ -85,9 +85,9 @@ export class Chart {
         this.initPanes()
     }
 
-    /** 获取所有 pane（包含布局信息与 renderers 列表） */
-    getPanes(): Pane[] {
-        return this.panes
+    /** 获取所有 PaneRenderer */
+    getPaneRenderers(): PaneRenderer[] {
+        return this.paneRenderers
     }
 
     /**
@@ -97,8 +97,9 @@ export class Chart {
      * @param renderers 渲染器数组；会清空并替换原有列表（保持引用稳定）
      */
     setPaneRenderers(paneId: string, renderers: Pane['renderers']) {
-        const pane = this.panes.find((p) => p.id === paneId)
-        if (!pane) return
+        const renderer = this.paneRenderers.find((r) => r.getPane().id === paneId)
+        if (!renderer) return
+        const pane = renderer.getPane()
         // 清空并替换（保持引用稳定）
         pane.renderers.length = 0
         for (const r of renderers) pane.renderers.push(r)
@@ -178,7 +179,7 @@ export class Chart {
      * 绘制一帧：
      * 1) computeViewport（设置 canvas 尺寸）
      * 2) 计算可视区 range（start/end）
-     * 3) 对每个 pane：更新 priceRange -> 执行 renderers（plotCanvas）-> 画 yAxis（yAxisCanvas）
+     * 3) 对每个 PaneRenderer：独立绘制 plotCanvas 和 yAxisCanvas
      * 4) 画 xAxis（xAxisCanvas）
      * 5) 画 overlay（十字线、图例、边框等）
      */
@@ -187,20 +188,14 @@ export class Chart {
         const vp = this.computeViewport()
         if (!vp) return
 
-        // 2. 获取三层 Canvas 上下文
-        const plotCtx = this.dom.plotCanvas.getContext('2d')
-        const yAxisCtx = this.dom.yAxisCanvas.getContext('2d')
+        // 2. 获取 xAxis Canvas 上下文
         const xAxisCtx = this.dom.xAxisCanvas.getContext('2d')
-        if (!plotCtx || !yAxisCtx || !xAxisCtx) return
+        if (!xAxisCtx) return
 
-        // 3. 清空 Canvas + 设置 DPR 缩放
-        plotCtx.setTransform(1, 0, 0, 1, 0, 0)
-        plotCtx.scale(vp.dpr, vp.dpr)
-        plotCtx.clearRect(0, 0, vp.plotWidth, vp.plotHeight)
-
-        yAxisCtx.setTransform(1, 0, 0, 1, 0, 0)
-        yAxisCtx.scale(vp.dpr, vp.dpr)
-        yAxisCtx.clearRect(0, 0, this.opt.rightAxisWidth, vp.plotHeight)
+        // 3. 清空 xAxis Canvas + 设置 DPR 缩放
+        xAxisCtx.setTransform(1, 0, 0, 1, 0, 0)
+        xAxisCtx.scale(vp.dpr, vp.dpr)
+        xAxisCtx.clearRect(0, 0, vp.plotWidth, this.opt.bottomAxisHeight)
 
         // 4. 计算可视数据范围
         const { start, end } = getVisibleRange(
@@ -213,83 +208,22 @@ export class Chart {
 
         const range: VisibleRange = { start, end }
 
-        // 5. 遍历所有 Pane（主图 + 副图）
-        for (const p of this.panes) {
-            // 5.1 更新 Pane 的价格范围
-            p.updateRange(this.data, range)
-
-            // 5.2 绘制 plot 层（渲染器链：网格线 → K线 → MA）
-            plotCtx.save()
-            plotCtx.beginPath()
-            plotCtx.rect(0, p.top, vp.plotWidth, p.height)
-            plotCtx.clip()
-            plotCtx.translate(0, p.top)
-            for (const r of p.renderers) {
-                r.draw({
-                    ctx: plotCtx,
-                    pane: p,
-                    data: this.data,
-                    range,
-                    scrollLeft: vp.scrollLeft,
-                    kWidth: this.opt.kWidth,
-                    kGap: this.opt.kGap,
-                    dpr: vp.dpr,
-                })
-            }
-            plotCtx.restore()
-
-            // 5.3 绘制 yAxis 刻度（每个 Pane 独立绘制一段）
-            createYAxisRenderer({
-                axisX: 0,
-                axisWidth: this.opt.rightAxisWidth,
-                yPaddingPx: this.opt.yPaddingPx,
-                ticks: p.id === 'sub' ? 2 : undefined,
-            }).draw({
-                ctx: yAxisCtx,
-                pane: p,
+        // 5. 遍历所有 PaneRenderer，独立绘制每个 pane
+        for (const renderer of this.paneRenderers) {
+            renderer.draw({
                 data: this.data,
                 range,
                 scrollLeft: vp.scrollLeft,
                 kWidth: this.opt.kWidth,
                 kGap: this.opt.kGap,
                 dpr: vp.dpr,
-            })
-
-            // 5.4 绘制十字线价格标签（画在 y-axis-canvas，避免 plotCanvas 重复）
-            if (this.interaction.crosshairPos && this.interaction.activePaneId === p.id) {
-                drawCrosshairPriceLabelForPane({
-                    ctx: yAxisCtx,
-                    pane: p,
-                    axisWidth: this.opt.rightAxisWidth,
-                    dpr: vp.dpr,
-                    crosshairY: this.interaction.crosshairPos.y,
-                    yPaddingPx: this.opt.yPaddingPx,
-                })
-            }
-        }
-
-        // 6. 绘制 Pane 边框（整体外框）
-        drawPaneBorders({
-            ctx: plotCtx,
-            dpr: vp.dpr,
-            width: vp.plotWidth,
-            panes: [{ top: 0, height: vp.plotHeight }],
-        })
-
-        // 7. 绘制副图标题（plot 层）
-        const subPane = this.panes.find((p) => p.id === 'sub')
-        if (subPane) {
-            drawPaneTitle({
-                ctx: plotCtx,
-                dpr: vp.dpr,
-                paneTop: subPane.top,
-                title: '副图(占位)',
+                crosshairPos: this.interaction.crosshairPos,
+                crosshairIndex: this.interaction.crosshairIndex,
+                title: renderer.getPane().id === 'sub' ? '副图(占位)' : undefined,
             })
         }
 
-        // yAxis 区域不绘制边框/分隔线：只保留绘图区域（plot）四周边线
-
-        // 8. 绘制 xAxis 时间轴（全局，底部一条）
+        // 7. 绘制 xAxis 时间轴（全局，底部一条）
         drawTimeAxisLayer({
             ctx: xAxisCtx,
             data: this.data,
@@ -305,34 +239,65 @@ export class Chart {
                     : null,
         })
 
-        // 9. 绘制十字线（屏幕坐标系绘制在 plotCanvas 最上层）
+        // 8. 绘制十字线
+        // 垂直线在所有 pane 上绘制，水平线只在活跃的 pane 上绘制（但在主图底部padding和副图顶部padding区域不绘制）
         if (this.interaction.crosshairPos) {
-            plotCtx.save()
-            plotCtx.beginPath()
-            plotCtx.rect(0, 0, vp.plotWidth, vp.plotHeight)
-            plotCtx.clip()
-            drawCrosshair({
-                ctx: plotCtx,
-                plotWidth: vp.plotWidth,
-                plotHeight: vp.plotHeight,
-                dpr: vp.dpr,
-                x: this.interaction.crosshairPos.x,
-                y: this.interaction.crosshairPos.y,
-            })
-            plotCtx.restore()
+            const { x, y } = this.interaction.crosshairPos
+            const activePaneId = this.interaction.activePaneId
+
+            for (const renderer of this.paneRenderers) {
+                const pane = renderer.getPane()
+                const plotCtx = renderer.getDom().plotCanvas.getContext('2d')
+                if (!plotCtx) continue
+
+                const isActive = pane.id === activePaneId
+                const localY = isActive ? y - pane.top : 0 // 活跃 pane 使用相对 y 坐标
+
+                // 计算水平线的绘制限制（不在主图底部padding和副图顶部padding区域绘制）
+                const yPaddingPx = this.opt.yPaddingPx
+                let horizontalYMin = 0
+                let horizontalYMax = pane.height
+
+                if (pane.id === 'main') {
+                    // 主图：不绘制在底部padding区域
+                    horizontalYMax = pane.height - yPaddingPx
+                } else if (pane.id === 'sub') {
+                    // 副图：不绘制在顶部padding区域
+                    horizontalYMin = yPaddingPx
+                }
+
+                plotCtx.save()
+                drawCrosshair({
+                    ctx: plotCtx,
+                    plotWidth: vp.plotWidth,
+                    plotHeight: pane.height,
+                    dpr: vp.dpr,
+                    x,
+                    y: localY,
+                    drawVertical: true,
+                    drawHorizontal: isActive,
+                    horizontalYMin,
+                    horizontalYMax,
+                })
+                plotCtx.restore()
+            }
         }
 
-        // 10. 绘制 MA 图例（屏幕坐标系绘制，不参与 scrollLeft）
-        // 先临时读取 main pane 的开关：由外部 renderer 传入 showMA 后，legend 才有意义。
-        // 当前 showMA 由 KLineChart.vue 负责决定是否接入 MA renderer，因此这里默认都显示。
-        drawMALegend({
-            ctx: plotCtx,
-            data: this.data,
-            yPaddingPx: this.opt.yPaddingPx,
-            endIndex: range.end,
-            showMA: { ma5: true, ma10: true, ma20: true },
-            dpr: vp.dpr,
-        })
+        // 9. 绘制 MA 图例（屏幕坐标系绘制，不参与 scrollLeft）
+        const mainRenderer = this.paneRenderers.find((r) => r.getPane().id === 'main')
+        if (mainRenderer) {
+            const plotCtx = mainRenderer.getDom().plotCanvas.getContext('2d')
+            if (plotCtx) {
+                drawMALegend({
+                    ctx: plotCtx,
+                    data: this.data,
+                    yPaddingPx: this.opt.yPaddingPx,
+                    endIndex: range.end,
+                    showMA: { ma5: true, ma10: true, ma20: true },
+                    dpr: vp.dpr,
+                })
+            }
+        }
     }
 
     /**
@@ -383,13 +348,58 @@ export class Chart {
         if (this.raf != null) cancelAnimationFrame(this.raf)
         this.raf = null
         this.viewport = null
-        this.panes = []
+        this.paneRenderers.forEach((r) => r.destroy())
+        this.paneRenderers = []
         this.onZoomChange = undefined
     }
 
-    /** 根据 opt.panes 重建 Pane 实例列表 */
+    /** 根据 opt.panes 重建 PaneRenderer 实例列表 */
     private initPanes() {
-        this.panes = this.opt.panes.map((p) => new Pane(p.id))
+        // 为每个 pane 创建独立的 canvas 元素
+        this.paneRenderers = this.opt.panes.map((spec, index) => {
+            const pane = new Pane(spec.id)
+
+            // 创建独立的 plotCanvas 和 yAxisCanvas
+            const plotCanvas = document.createElement('canvas')
+            const yAxisCanvas = document.createElement('canvas')
+
+            // 设置初始样式
+            plotCanvas.style.position = 'absolute'
+            plotCanvas.style.left = '0'
+            plotCanvas.style.top = '0'
+
+            yAxisCanvas.style.position = 'absolute'
+            yAxisCanvas.style.top = '0'
+            yAxisCanvas.style.right = '0'
+
+            // 创建 PaneRenderer
+            const renderer = new PaneRenderer(
+                { plotCanvas, yAxisCanvas },
+                pane,
+                {
+                    rightAxisWidth: this.opt.rightAxisWidth,
+                    yPaddingPx: this.opt.yPaddingPx,
+                    isLast: index === this.opt.panes.length - 1, // 最后一个 pane 标记
+                }
+            )
+
+            return renderer
+        })
+
+        // 将 canvas 元素添加到 canvasLayer
+        const canvasLayer = this.dom.canvasLayer
+        if (canvasLayer) {
+            // 先清空 canvasLayer（除了 xAxisCanvas）
+            const existingCanvases = canvasLayer.querySelectorAll('canvas:not(.x-axis-canvas)')
+            existingCanvases.forEach((canvas) => canvas.remove())
+
+            // 添加新的 canvas 元素
+            this.paneRenderers.forEach((renderer) => {
+                const dom = renderer.getDom()
+                canvasLayer.appendChild(dom.plotCanvas)
+                canvasLayer.appendChild(dom.yAxisCanvas)
+            })
+        }
     }
 
     /**
@@ -405,18 +415,27 @@ export class Chart {
         const gap = Math.max(0, this.opt.paneGap ?? 0)
         let y = 0
 
-        const n = Math.min(this.panes.length, this.opt.panes.length)
+        const n = Math.min(this.paneRenderers.length, this.opt.panes.length)
         const totalGaps = gap * Math.max(0, n - 1)
         const availableH = Math.max(1, vp.plotHeight - totalGaps)
         for (let i = 0; i < n; i++) {
             const spec = this.opt.panes[i]
-            const pane = this.panes[i]
-            if (!spec || !pane) continue
+            const renderer = this.paneRenderers[i]
+            if (!spec || !renderer) continue
 
+            const pane = renderer.getPane()
             const h = i === n - 1 ? availableH - y : Math.round(availableH * (spec.ratio / totalRatio))
 
             pane.setLayout(y, h)
             pane.setPadding(this.opt.yPaddingPx, this.opt.yPaddingPx)
+
+            // 调整 PaneRenderer 的 canvas 尺寸和位置
+            renderer.resize(vp.plotWidth, h, vp.dpr)
+            // 设置 canvas 的 top 位置
+            const dom = renderer.getDom()
+            dom.plotCanvas.style.top = `${y}px`
+            dom.yAxisCanvas.style.top = `${y}px`
+
             y += h + gap
         }
     }
@@ -426,7 +445,7 @@ export class Chart {
      * - 读取 container 尺寸
      * - 计算 plot 区域尺寸（扣掉右轴/底轴）
      * - 处理 DPR 以及最大像素限制（避免超大 canvas）
-     * - 设置 canvasLayer/三个 canvas 的 style 尺寸与实际像素尺寸
+     * - 设置 canvasLayer/xAxisCanvas 的 style 尺寸与实际像素尺寸
      */
     private computeViewport(): Viewport | null {
         const container = this.dom.container
@@ -450,18 +469,9 @@ export class Chart {
         this.dom.canvasLayer.style.width = `${viewWidth}px`
         this.dom.canvasLayer.style.height = `${viewHeight}px`
 
-        this.dom.plotCanvas.style.width = `${plotWidth}px`
-        this.dom.plotCanvas.style.height = `${plotHeight}px`
-        this.dom.plotCanvas.width = Math.round(plotWidth * dpr)
-        this.dom.plotCanvas.height = Math.round(plotHeight * dpr)
-
-        this.dom.yAxisCanvas.style.width = `${this.opt.rightAxisWidth}px`
-        this.dom.yAxisCanvas.style.height = `${plotHeight}px`
-        this.dom.yAxisCanvas.width = Math.round(this.opt.rightAxisWidth * dpr)
-        this.dom.yAxisCanvas.height = Math.round(plotHeight * dpr)
-
         this.dom.xAxisCanvas.style.width = `${plotWidth}px`
         this.dom.xAxisCanvas.style.height = `${this.opt.bottomAxisHeight}px`
+        this.dom.xAxisCanvas.style.top = `${plotHeight}px`
         this.dom.xAxisCanvas.width = Math.round(plotWidth * dpr)
         this.dom.xAxisCanvas.height = Math.round(this.opt.bottomAxisHeight * dpr)
 

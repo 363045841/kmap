@@ -186,8 +186,12 @@ export class InteractionController {
         const idx = Math.floor(offset / unit)
 
         // pane 选择：按鼠标 y 落在哪个 pane（先基于 layout.top/height）
-        const panes = this.chart.getPanes()
-        const pane = panes.find((p) => mouseY >= p.top && mouseY <= p.top + p.height)
+        const paneRenderers = this.chart.getPaneRenderers()
+        const renderer = paneRenderers.find((r) => {
+            const pane = r.getPane()
+            return mouseY >= pane.top && mouseY <= pane.top + pane.height
+        })
+        const pane = renderer?.getPane() || null
         if (!pane) {
             // 鼠标在 plot 区域但落在 paneGap 上：仍显示 crosshair（不属于任何 pane），但不显示 tooltip/label
             this.activePaneId = null
