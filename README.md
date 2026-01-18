@@ -11,6 +11,10 @@
 - 📱 **响应式设计**：适配不同屏幕尺寸
 - ⚡ **高性能**：使用 requestAnimationFrame 优化渲染性能
 
+## 应用截图
+
+![应用截图](https://s2.loli.net/2026/01/19/XON3dUF2cWtlEh4.png)
+
 ## 技术栈
 
 - [Vue 3](https://vuejs.org/) - 渐进式 JavaScript 框架
