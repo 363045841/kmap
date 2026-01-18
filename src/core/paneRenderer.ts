@@ -3,7 +3,6 @@ import { Pane, type VisibleRange } from '@/core/layout/pane'
 import { createYAxisRenderer } from '@/core/renderers/yAxis'
 import { drawCrosshairPriceLabelForPane } from '@/core/renderers/crosshairLabels'
 import { drawPaneTitle } from '@/core/renderers/paneTitle'
-import { drawPaneBorders } from '@/core/renderers/paneBorder'
 
 export type PaneRendererDom = {
     plotCanvas: HTMLCanvasElement
@@ -30,7 +29,6 @@ export class PaneRenderer {
     private dom: PaneRendererDom
     private pane: Pane
     private opt: PaneRendererOptions
-    private raf: number | null = null
 
     constructor(dom: PaneRendererDom, pane: Pane, opt: PaneRendererOptions) {
         this.dom = dom
@@ -71,17 +69,6 @@ export class PaneRenderer {
     }
 
     /**
-     * 请求下一帧重绘（RAF 合并）。
-     */
-    scheduleDraw() {
-        if (this.raf != null) cancelAnimationFrame(this.raf)
-        this.raf = requestAnimationFrame(() => {
-            this.raf = null
-            this.draw()
-        })
-    }
-
-    /**
      * 绘制该 Pane 的内容。
      *
      * @param args 绘制参数
@@ -113,7 +100,8 @@ export class PaneRenderer {
         // 3. 清空 Canvas + 设置 DPR 缩放
         plotCtx.setTransform(1, 0, 0, 1, 0, 0)
         plotCtx.scale(dpr, dpr)
-        plotCtx.clearRect(0, 0, paneWidth, paneHeight)
+        // 额外清除 2 逻辑像素，确保像素对齐导致的边缘十字线也能被清除
+        plotCtx.clearRect(0, 0, paneWidth, paneHeight + 2 / dpr)
 
         yAxisCtx.setTransform(1, 0, 0, 1, 0, 0)
         yAxisCtx.scale(dpr, dpr)
@@ -177,32 +165,10 @@ export class PaneRenderer {
                 title,
             })
         }
-
-        // 8. 绘制 Pane 边框（每个 pane 自己的 canvas 上绘制）
-        if (this.pane.id === 'main') {
-            // 主图：只绘制上、左、右边框
-            drawPaneBorders({
-                ctx: plotCtx,
-                dpr,
-                width: paneWidth,
-                panes: [{ top: 0, height: paneHeight }],
-                omitOuterBottom: true, // 主图不绘制底边框
-            })
-        } else if (this.pane.id === 'sub') {
-            // 副图：只绘制左、右、下边框
-            drawPaneBorders({
-                ctx: plotCtx,
-                dpr,
-                width: paneWidth,
-                panes: [{ top: 0, height: paneHeight }],
-                omitOuterTop: true, // 副图不绘制顶边框
-            })
-        }
     }
 
-    /** 销毁：取消 RAF */
+    /** 销毁 */
     destroy() {
-        if (this.raf != null) cancelAnimationFrame(this.raf)
-        this.raf = null
+        // PaneRenderer 没有需要清理的 RAF 资源，此方法为空实现
     }
 }
