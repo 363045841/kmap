@@ -7,7 +7,7 @@ import { createHorizontalLineRect, createVerticalLineRect } from '@/core/draw/pi
  * - 纵向：按月分割（与时间轴刻度保持同一规则，但不画文字）
  */
 export const GridLinesRenderer: PaneRenderer = {
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
         if (!data.length) return
 
         const unit = kWidth + kGap

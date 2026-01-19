@@ -22,6 +22,7 @@ export interface PaneRenderer {
         kWidth: number
         kGap: number
         dpr: number
+        paneWidth: number
     }): void
 }
 

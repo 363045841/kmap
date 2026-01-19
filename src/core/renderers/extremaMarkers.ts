@@ -8,7 +8,7 @@ import { roundToPhysicalPixel, createHorizontalLineRect } from '@/core/draw/pixe
  * - world 坐标绘制（会 translate(-scrollLeft, 0)）
  */
 export const ExtremaMarkersRenderer: PaneRenderer = {
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth }) {
         if (!data.length) return
 
         // 副图占位时不画极值标注（避免空白区域出现无意义标注）
@@ -43,27 +43,43 @@ export const ExtremaMarkersRenderer: PaneRenderer = {
 
         ctx.save()
         ctx.translate(-scrollLeft, 0)
-        drawPriceMarker(ctx, centerX(maxIndex), pane.yAxis.priceToY(max), max, dpr)
-        drawPriceMarker(ctx, centerX(minIndex), pane.yAxis.priceToY(min), min, dpr)
+        drawPriceMarker(ctx, centerX(maxIndex), pane.yAxis.priceToY(max), max, dpr, paneWidth, scrollLeft)
+        drawPriceMarker(ctx, centerX(minIndex), pane.yAxis.priceToY(min), min, dpr, paneWidth, scrollLeft)
         ctx.restore()
     },
 }
 
-function drawPriceMarker(ctx: CanvasRenderingContext2D, x: number, y: number, price: number, dpr: number) {
+function drawPriceMarker(ctx: CanvasRenderingContext2D, x: number, y: number, price: number, dpr: number, paneWidth: number, scrollLeft: number) {
     const text = price.toFixed(2)
     const padding = 4
     const lineLength = 30
     const dotRadius = 2
 
+    // 计算文本宽度
+    ctx.font = '12px Arial'
+    const textMetrics = ctx.measureText(text)
+    const textWidth = textMetrics.width
+
+    // 判断是否需要向左绘制
+    // 注意：x 是 world 坐标，需要转换为视口坐标（减去 scrollLeft）再与 paneWidth 比较
+    const visibleX = x - scrollLeft
+    const rightEdge = visibleX + lineLength + padding + textWidth
+    const drawLeft = rightEdge > paneWidth
+
     // 引导线
-    const lineRect = createHorizontalLineRect(x, x + lineLength, y, dpr)
+    let lineStartX = x
+    let lineEndX = drawLeft ? x - lineLength : x + lineLength
+    if (lineStartX > lineEndX) {
+        ;[lineStartX, lineEndX] = [lineEndX, lineStartX]
+    }
+    const lineRect = createHorizontalLineRect(lineStartX, lineEndX, y, dpr)
     if (lineRect) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)'
         ctx.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height)
     }
 
     // 末端点
-    const endX = roundToPhysicalPixel(x + lineLength, dpr)
+    const endX = roundToPhysicalPixel(lineEndX, dpr)
     const alignedY = roundToPhysicalPixel(y, dpr)
     ctx.fillStyle = 'rgba(0,0,0,0.45)'
     ctx.beginPath()
@@ -73,7 +89,15 @@ function drawPriceMarker(ctx: CanvasRenderingContext2D, x: number, y: number, pr
     // 文本
     ctx.font = '12px Arial'
     ctx.textBaseline = 'middle'
-    ctx.textAlign = 'left'
     ctx.fillStyle = 'rgba(0,0,0,0.70)'
-    ctx.fillText(text, roundToPhysicalPixel(x + lineLength + padding, dpr), roundToPhysicalPixel(y, dpr))
+
+    if (drawLeft) {
+        // 向左绘制
+        ctx.textAlign = 'right'
+        ctx.fillText(text, roundToPhysicalPixel(x - lineLength - padding, dpr), roundToPhysicalPixel(y, dpr))
+    } else {
+        // 向右绘制（默认）
+        ctx.textAlign = 'left'
+        ctx.fillText(text, roundToPhysicalPixel(x + lineLength + padding, dpr), roundToPhysicalPixel(y, dpr))
+    }
 }

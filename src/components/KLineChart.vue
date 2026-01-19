@@ -56,6 +56,8 @@ type MAFlags = {
   ma5?: boolean
   ma10?: boolean
   ma20?: boolean
+  ma30?: boolean
+  ma60?: boolean
 }
 
 const props = withDefaults(
@@ -72,6 +74,8 @@ const props = withDefaults(
     rightAxisWidth?: number
     /** 底部时间轴高度 */
     bottomAxisHeight?: number
+    /** 价格标签额外宽度（用于显示涨跌幅，默认 60px） */
+    priceLabelWidth?: number
 
     /** Pane 高度比例（主/副），默认 [0.85, 0.15] */
     paneRatios?: [number, number]
@@ -80,12 +84,13 @@ const props = withDefaults(
     kWidth: 10,
     kGap: 2,
     yPaddingPx: 0,
-    showMA: () => ({ ma5: true, ma10: true, ma20: true }),
+    showMA: () => ({ ma5: true, ma10: true, ma20: true, ma30: true, ma60: true }),
     autoScrollToRight: true,
     minKWidth: 2,
     maxKWidth: 50,
     rightAxisWidth: 70,
     bottomAxisHeight: 24,
+    priceLabelWidth: 60,
 
     paneRatios: () => [0.75, 0.25],
   },
@@ -216,6 +221,8 @@ function handleIndicatorToggle(indicatorId: string, active: boolean) {
       ma5: active,
       ma10: active,
       ma20: active,
+      ma30: active,
+      ma60: active,
     }
     chartRef.value?.setPaneRenderers('main', [
       GridLinesRenderer,
@@ -229,11 +236,12 @@ function handleIndicatorToggle(indicatorId: string, active: boolean) {
   scheduleRender()
 }
 
-/* 计算总宽度：绑图区域宽度 + 右侧轴宽度 */
+/* 计算总宽度：绑图区域宽度 + 右侧轴宽度 + 价格标签宽度 */
 const totalWidth = computed(() => {
   const n = props.data?.length ?? 0
   const plotWidth = currentKGap.value + n * (currentKWidth.value + currentKGap.value)
-  return plotWidth + props.rightAxisWidth
+  const yAxisTotalWidth = props.rightAxisWidth + props.priceLabelWidth
+  return plotWidth + yAxisTotalWidth
 })
 
 // 注意：缩放时由 Chart.setOnZoomChange 回调负责同步 kWidth/kGap + scrollLeft，避免重复 clamp。
@@ -273,6 +281,7 @@ onMounted(() => {
       yPaddingPx: props.yPaddingPx,
       rightAxisWidth: props.rightAxisWidth,
       bottomAxisHeight: props.bottomAxisHeight,
+      priceLabelWidth: props.priceLabelWidth,
       minKWidth: props.minKWidth,
       maxKWidth: props.maxKWidth,
       panes,

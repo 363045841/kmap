@@ -60,21 +60,21 @@ export function formatDateToYYYYMMDD(timestamp: number): string {
 
 /**
  * 格式化月份或年份用于显示
- * 当年为 1 月时显示年份，其他月份显示月份号
+ * 当年为 1 月时显示年份，其他月份显示"X月"格式
  * @param timestamp - 时间戳（毫秒）
  * @returns 包含文本和是否为年份的标志
  *
  * @example
  * formatMonthOrYear(1704067200000) // { text: "2024", isYear: true }  (2024年1月)
- * formatMonthOrYear(1706745600000) // { text: "02", isYear: false } (2024年2月)
+ * formatMonthOrYear(1706745600000) // { text: "2月", isYear: false } (2024年2月)
  */
 export function formatMonthOrYear(timestamp: number): { text: string; isYear: boolean } {
     const d = new Date(timestamp)
     const year = d.getFullYear()
     const month = d.getMonth() + 1
-    // 当年 1 月：直接标注年份；其它月份：标注月份（不带日期）
+    // 当年 1 月：直接标注年份；其它月份：标注"X月"
     if (month === 1) return { text: String(year), isYear: true }
-    return { text: String(month).padStart(2, '0'), isYear: false }
+    return { text: `${month}月`, isYear: false }
 }
 
 /**

@@ -12,7 +12,7 @@ export function createYAxisRenderer(opts: {
     ticks?: number
 }): PaneRenderer {
     return {
-        draw({ ctx, pane, dpr }) {
+        draw({ ctx, pane, dpr, paneWidth: _paneWidth }) {
             const ticks = typeof opts.ticks === 'number' ? opts.ticks : Math.max(2, Math.min(8, Math.round(pane.height / 80)))
             drawPriceAxis(ctx, {
                 x: opts.axisX,

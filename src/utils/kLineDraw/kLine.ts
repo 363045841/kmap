@@ -6,7 +6,7 @@ import {
   alignRect,
   createVerticalLineRect,
   createHorizontalLineRect,
-} from './pixelAlign'
+} from '@/core/draw/pixelAlign'
 
 export interface drawOption {
   kWidth: number

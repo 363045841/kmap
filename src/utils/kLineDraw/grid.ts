@@ -6,7 +6,7 @@ import {
     createHorizontalLineRect,
     createVerticalLineRect,
     roundToPhysicalPixel,
-} from './pixelAlign'
+} from '@/core/draw/pixelAlign'
 import { formatMonthOrYear, monthKey } from '@/utils/dateFormat'
 
 export interface GridOption {

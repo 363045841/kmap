@@ -6,6 +6,8 @@ import { alignToPhysicalPixelCenter } from '@/core/draw/pixelAlign'
 export const MA5_COLOR = 'rgba(255, 193, 37, 1)'
 export const MA10_COLOR = 'rgba(190, 131, 12, 1)'
 export const MA20_COLOR = 'rgba(69, 112, 249, 1)'
+export const MA30_COLOR = 'rgba(76, 175, 80, 1)'
+export const MA60_COLOR = 'rgba(156, 39, 176, 1)'
 
 /**
  * 通用 MA 线绘制函数 - 逻辑像素坐标系
@@ -127,4 +129,30 @@ export function drawMA20Line(
   priceRange?: PriceRange
 ) {
   drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 20, MA20_COLOR)
+}
+
+export function drawMA30Line(
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number = 1,
+  startIndex: number = 0,
+  endIndex: number = data.length,
+  priceRange?: PriceRange
+) {
+  drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 30, MA30_COLOR)
+}
+
+export function drawMA60Line(
+  ctx: CanvasRenderingContext2D,
+  data: KLineData[],
+  option: drawOption,
+  logicHeight: number,
+  dpr: number = 1,
+  startIndex: number = 0,
+  endIndex: number = data.length,
+  priceRange?: PriceRange
+) {
+  drawMALine(ctx, data, option, logicHeight, dpr, startIndex, endIndex, priceRange, 60, MA60_COLOR)
 }

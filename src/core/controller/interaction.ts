@@ -145,6 +145,11 @@ export class InteractionController {
         this.tooltipSize = size
     }
 
+    /** 检查是否正在拖拽 */
+    isDraggingState(): boolean {
+        return this.isDragging
+    }
+
     private clearHover() {
         this.crosshairPos = null
         this.crosshairIndex = null
@@ -236,8 +241,18 @@ export class InteractionController {
         const inUnitX = offset - (this.crosshairIndex as number) * unit
         const HIT_WICK_HALF = 3
         const cx = opt.kWidth / 2
-        const hitBody = localY >= bodyTop && localY <= bodyBottom && inUnitX >= 0 && inUnitX <= opt.kWidth
-        const hitWick = Math.abs(inUnitX - cx) <= HIT_WICK_HALF && localY >= highY && localY <= lowY
+
+        // 扩大 hitBody 的 Y 方向判定范围：当实体线很小时，使用最小判定高度
+        const MIN_BODY_HIT_HEIGHT = 8 // 最小判定高度（逻辑像素）
+        const bodyHeight = Math.abs(bodyBottom - bodyTop)
+        const effectiveBodyTop = bodyHeight < MIN_BODY_HIT_HEIGHT ? (bodyTop + bodyBottom) / 2 - MIN_BODY_HIT_HEIGHT / 2 : bodyTop
+        const effectiveBodyBottom = bodyHeight < MIN_BODY_HIT_HEIGHT ? (bodyTop + bodyBottom) / 2 + MIN_BODY_HIT_HEIGHT / 2 : bodyBottom
+
+        // 扩大 hitWick 的 X 方向判定范围：让更容易命中 wick
+        const HIT_WICK_HALF_EXTENDED = 6 // 扩大后的 wick 判定半宽
+
+        const hitBody = localY >= effectiveBodyTop && localY <= effectiveBodyBottom && inUnitX >= 0 && inUnitX <= opt.kWidth
+        const hitWick = Math.abs(inUnitX - cx) <= HIT_WICK_HALF_EXTENDED && localY >= highY && localY <= lowY
 
         if (!hitBody && !hitWick) {
             this.hoveredIndex = null

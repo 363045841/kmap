@@ -154,6 +154,8 @@ export interface CrosshairPriceLabelOptions {
     textColor?: string
     fontSize?: number
     paddingX?: number
+    /** 最新价，用于计算涨跌幅 */
+    lastPrice?: number
 }
 
 export interface CrosshairTimeLabelOptions {
@@ -238,10 +240,11 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
         priceRange,
         yPaddingPx = 0,
         dpr,
-        bgColor = 'rgba(0,0,0,0.55)',
+        bgColor = 'rgb(0,0,0)',
         textColor = 'rgba(255,255,255,0.92)',
         fontSize = 12,
         paddingX = 12,
+        lastPrice,
     } = opts
 
     const pad = Math.max(0, Math.min(yPaddingPx, Math.floor(height / 2) - 1))
@@ -249,7 +252,20 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
 
     // 将 y 反算回价格
     const price = yToPrice(crosshairY - y, maxPrice, minPrice, height, pad, pad)
-    const text = price.toFixed(2)
+    const priceText = price.toFixed(2)
+
+    // 计算涨跌幅
+    let changeText = ''
+    let changeColor = textColor
+    if (lastPrice && lastPrice > 0) {
+        const change = price - lastPrice
+        const changePercent = (change / lastPrice) * 100
+        const sign = change >= 0 ? '+' : ''
+        changeText = ` ${sign}${changePercent.toFixed(2)}%`
+        changeColor = change >= 0 ? 'rgba(214, 10, 34, 0.92)' : 'rgb(29, 190, 0)' // 红涨绿跌
+    }
+
+    const text = priceText + changeText
 
     ctx.save()
     ctx.font = `${fontSize}px -apple-system,BlinkMacSystemFont,Trebuchet MS,Roboto,Ubuntu,sans-serif`
@@ -269,10 +285,17 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
     ctx.fillStyle = bgColor
     ctx.fillRect(roundToPhysicalPixel(x, dpr), roundToPhysicalPixel(rectY, dpr), roundToPhysicalPixel(rectW, dpr), roundToPhysicalPixel(rectH, dpr))
 
-    // 文字
-    ctx.fillStyle = textColor
+    // 绘制价格文字
     const tx = x + paddingX
-    ctx.fillText(text, roundToPhysicalPixel(tx, dpr), roundToPhysicalPixel(yy, dpr))
+    const priceMetrics = ctx.measureText(priceText)
+    ctx.fillStyle = textColor
+    ctx.fillText(priceText, roundToPhysicalPixel(tx, dpr), roundToPhysicalPixel(yy, dpr))
+
+    // 绘制涨跌幅文字
+    if (changeText) {
+        ctx.fillStyle = changeColor
+        ctx.fillText(changeText, roundToPhysicalPixel(tx + priceMetrics.width, dpr), roundToPhysicalPixel(yy, dpr))
+    }
 
     ctx.restore()
 }

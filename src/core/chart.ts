@@ -46,6 +46,9 @@ export type ChartOptions = {
 
     /** pane 之间的真实分隔空隙（逻辑像素） */
     paneGap?: number
+
+    /** 价格标签额外宽度（用于显示涨跌幅，默认 60px） */
+    priceLabelWidth?: number
 }
 
 export type Viewport = {
@@ -159,12 +162,13 @@ export class Chart {
 
     /**
      * 内容总宽度（用于外部 scroll-content 撑开 scrollWidth）
-     * 规则：kGap + n*(kWidth+kGap) + rightAxisWidth
+     * 规则：kGap + n*(kWidth+kGap) + rightAxisWidth + priceLabelWidth
      */
     getContentWidth(): number {
         const n = this.data?.length ?? 0
         const plotWidth = this.opt.kGap + n * (this.opt.kWidth + this.opt.kGap)
-        return plotWidth + this.opt.rightAxisWidth
+        const yAxisTotalWidth = this.opt.rightAxisWidth + (this.opt.priceLabelWidth || 60)
+        return plotWidth + yAxisTotalWidth
     }
 
     /**
@@ -225,6 +229,8 @@ export class Chart {
         const range: VisibleRange = { start, end }
 
         // 5. 遍历所有 PaneRenderer，独立绘制每个 pane
+        // 拖拽状态下不传递crosshair信息，避免绘制Y轴标签
+        const isDragging = this.interaction.isDraggingState()
         for (const renderer of this.paneRenderers) {
             renderer.draw({
                 data: this.data,
@@ -233,13 +239,14 @@ export class Chart {
                 kWidth: this.opt.kWidth,
                 kGap: this.opt.kGap,
                 dpr: vp.dpr,
-                crosshairPos: this.interaction.crosshairPos,
-                crosshairIndex: this.interaction.crosshairIndex,
+                crosshairPos: isDragging ? null : this.interaction.crosshairPos,
+                crosshairIndex: isDragging ? null : this.interaction.crosshairIndex,
                 title: renderer.getPane().id === 'sub' ? '副图(占位)' : undefined,
             })
         }
 
         // 7. 绘制 xAxis 时间轴（全局，底部一条）
+        // 拖拽状态下不绘制X轴时间标签
         drawTimeAxisLayer({
             ctx: xAxisCtx,
             data: this.data,
@@ -250,14 +257,15 @@ export class Chart {
             endIndex: range.end,
             dpr: vp.dpr,
             crosshair:
-                this.interaction.crosshairPos && typeof this.interaction.crosshairIndex === 'number'
+                !isDragging && this.interaction.crosshairPos && typeof this.interaction.crosshairIndex === 'number'
                     ? { x: this.interaction.crosshairPos.x, index: this.interaction.crosshairIndex }
                     : null,
         })
 
         // 8. 绘制十字线
         // 垂直线在所有 pane 上绘制，水平线只在活跃的 pane 上绘制
-        if (this.interaction.crosshairPos) {
+        // 拖拽状态下不绘制十字线
+        if (!isDragging && this.interaction.crosshairPos) {
             const { x, y } = this.interaction.crosshairPos
             const activePaneId = this.interaction.activePaneId
 
@@ -295,7 +303,7 @@ export class Chart {
                     data: this.data,
                     yPaddingPx: this.opt.yPaddingPx,
                     endIndex: range.end,
-                    showMA: { ma5: true, ma10: true, ma20: true },
+                    showMA: { ma5: true, ma10: true, ma20: true, ma30: true, ma60: true },
                     dpr: vp.dpr,
                 })
             }
@@ -401,6 +409,7 @@ export class Chart {
                 {
                     rightAxisWidth: this.opt.rightAxisWidth,
                     yPaddingPx: this.opt.yPaddingPx,
+                    priceLabelWidth: this.opt.priceLabelWidth, // 传递价格标签宽度配置
                     isLast: index === this.opt.panes.length - 1, // 最后一个 pane 标记
                 }
             )
@@ -487,7 +496,8 @@ export class Chart {
         const viewHeight = Math.max(1, Math.round(rect.height))
         const scrollLeft = container.scrollLeft
 
-        const plotWidth = viewWidth - this.opt.rightAxisWidth
+        const yAxisTotalWidth = this.opt.rightAxisWidth + (this.opt.priceLabelWidth || 60)
+        const plotWidth = viewWidth - yAxisTotalWidth
         const plotHeight = viewHeight - this.opt.bottomAxisHeight
 
         let dpr = window.devicePixelRatio || 1

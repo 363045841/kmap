@@ -4,7 +4,7 @@
     :kWidth="10"
     :kGap="2"
     :yPaddingPx="24"
-    :showMA="{ ma5: true, ma10: true, ma20: true }"
+    :showMA="{ ma5: true, ma10: true, ma20: true, ma30: true, ma60: true }"
     :autoScrollToRight="true"
   />
 </template>

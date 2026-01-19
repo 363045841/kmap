@@ -9,7 +9,7 @@ const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
  * 最小 Candle 渲染器：依赖 pane.yAxis 做 price->y。
  */
 export const CandleRenderer: PaneRenderer = {
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
         if (!data.length) return
 
         const unit = kWidth + kGap

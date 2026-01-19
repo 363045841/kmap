@@ -9,8 +9,9 @@ export function drawCrosshairPriceLabelForPane(args: {
     dpr: number
     crosshairY: number
     yPaddingPx: number
+    lastPrice?: number
 }) {
-    const { ctx, pane, axisWidth, dpr, crosshairY, yPaddingPx } = args
+    const { ctx, pane, axisWidth, dpr, crosshairY, yPaddingPx, lastPrice } = args
     drawCrosshairPriceLabel(ctx, {
         x: 0,
         y: pane.top,
@@ -20,6 +21,7 @@ export function drawCrosshairPriceLabelForPane(args: {
         priceRange: pane.priceRange,
         yPaddingPx,
         dpr,
+        lastPrice,
     })
 }
 
@@ -46,4 +48,3 @@ export function drawCrosshairTimeLabelGlobal(args: {
         dpr,
     })
 }
-

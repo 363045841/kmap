@@ -6,7 +6,7 @@ import { drawGridLayer } from '@/utils/kLineDraw/grid'
  * 复用旧的 drawGridLayer（内部要求 ctx 已 translate(-scrollLeft,0)）。
  */
 export const GridRenderer: PaneRenderer = {
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
         ctx.save()
         ctx.translate(-scrollLeft, 0)
         drawGridLayer(
