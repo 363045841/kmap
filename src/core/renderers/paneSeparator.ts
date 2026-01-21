@@ -1,4 +1,5 @@
 import { createHorizontalLineRect } from '@/core/draw/pixelAlign'
+import { BORDER_COLORS } from '@/core/theme/colors'
 
 export function drawPaneSeparators(args: {
     ctx: CanvasRenderingContext2D
@@ -7,7 +8,7 @@ export function drawPaneSeparators(args: {
     panes: Array<{ top: number; height: number }>
     color?: string
 }) {
-    const { ctx, dpr, plotWidth, panes, color = 'rgba(0,0,0,0.10)' } = args
+    const { ctx, dpr, plotWidth, panes, color = BORDER_COLORS.SEPARATOR } = args
     if (panes.length <= 1) return
 
     ctx.save()

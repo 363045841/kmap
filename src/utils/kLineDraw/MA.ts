@@ -2,12 +2,13 @@ import type { KLineData } from '@/types/price'
 import { priceToY } from '../priceToY'
 import type { drawOption, PriceRange } from './kLine'
 import { alignToPhysicalPixelCenter } from '@/core/draw/pixelAlign'
+import { MA_COLORS } from '@/core/theme/colors'
 
-export const MA5_COLOR = 'rgba(255, 193, 37, 1)'
-export const MA10_COLOR = 'rgba(190, 131, 12, 1)'
-export const MA20_COLOR = 'rgba(69, 112, 249, 1)'
-export const MA30_COLOR = 'rgba(76, 175, 80, 1)'
-export const MA60_COLOR = 'rgba(156, 39, 176, 1)'
+export const MA5_COLOR = MA_COLORS.MA5
+export const MA10_COLOR = MA_COLORS.MA10
+export const MA20_COLOR = MA_COLORS.MA20
+export const MA30_COLOR = MA_COLORS.MA30
+export const MA60_COLOR = MA_COLORS.MA60
 
 /**
  * 通用 MA 线绘制函数 - 逻辑像素坐标系

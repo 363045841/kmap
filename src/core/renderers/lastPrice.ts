@@ -1,4 +1,5 @@
 import type { PaneRenderer } from '@/core/layout/pane'
+import { PRICE_COLORS } from '@/core/theme/colors'
 
 /**
  * 最新价虚线：画在 plotCanvas 的 world 坐标系（需 translate(-scrollLeft,0)）
@@ -17,7 +18,7 @@ export const LastPriceLineRenderer: PaneRenderer = {
         const startX = kGap + range.start * unit
         const endX = kGap + range.end * unit
 
-        ctx.strokeStyle = '#F59999'
+        ctx.strokeStyle = PRICE_COLORS.LAST_PRICE
         ctx.lineWidth = 1
         ctx.setLineDash([4, 3])
         ctx.beginPath()

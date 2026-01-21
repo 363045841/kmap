@@ -1,3 +1,5 @@
+import { TEXT_COLORS } from '@/core/theme/colors'
+
 export function drawPaneTitle(args: {
     ctx: CanvasRenderingContext2D
     dpr: number
@@ -9,10 +11,9 @@ export function drawPaneTitle(args: {
     ctx.font = `12px Arial`
     ctx.textBaseline = 'top'
     ctx.textAlign = 'left'
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.fillStyle = TEXT_COLORS.TERTIARY
     const x = 8
     const y = paneTop + 8
     ctx.fillText(title, x, y)
     ctx.restore()
 }
-

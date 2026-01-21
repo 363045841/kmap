@@ -8,6 +8,7 @@ import {
     roundToPhysicalPixel,
 } from '@/core/draw/pixelAlign'
 import { formatMonthOrYear, monthKey } from '@/utils/dateFormat'
+import { GRID_COLORS, TEXT_COLORS, PRICE_COLORS } from '@/core/theme/colors'
 
 export interface GridOption {
     /** 网格线颜色 */
@@ -59,9 +60,9 @@ export function drawGridLayer(
     const paddingBottom = pad
 
     const unit = option.kWidth + option.kGap
-    const gridColor = gridOpt.gridColor ?? 'rgba(0,0,0,0.08)'
-    const lastPriceColor = gridOpt.lastPriceColor ?? 'rgb(183, 22, 22)'
-    const textColor = gridOpt.textColor ?? 'rgba(0,0,0,0.55)'
+    const gridColor = gridOpt.gridColor ?? GRID_COLORS.HORIZONTAL
+    const lastPriceColor = gridOpt.lastPriceColor ?? PRICE_COLORS.LAST_PRICE
+    const textColor = gridOpt.textColor ?? TEXT_COLORS.TERTIARY
     const fontSize = gridOpt.fontSize ?? 12
     const rightTextPadding = gridOpt.rightTextPadding ?? 6
     const bottomTextPadding = gridOpt.bottomTextPadding ?? 4

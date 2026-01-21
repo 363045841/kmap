@@ -7,6 +7,7 @@ import {
   createVerticalLineRect,
   createHorizontalLineRect,
 } from '@/core/draw/pixelAlign'
+import { PRICE_COLORS, TEXT_COLORS } from '@/core/theme/colors'
 
 export interface drawOption {
   kWidth: number
@@ -18,9 +19,6 @@ export interface PriceRange {
   maxPrice: number
   minPrice: number
 }
-
-const UP_COLOR = 'rgba(214, 10, 34, 1)'
-const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
 
 /**
  * 绘制价格标记
@@ -40,14 +38,14 @@ function drawPriceMarker(
   // 使用填充矩形绘制水平引导线
   const lineRect = createHorizontalLineRect(x, x + lineLength, y, dpr)
   if (lineRect) {
-    ctx.fillStyle = '#666'
+    ctx.fillStyle = TEXT_COLORS.WEAK
     ctx.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height)
   }
 
   // 绘制线末小圆点
   const endX = roundToPhysicalPixel(x + lineLength, dpr)
   const alignedY = roundToPhysicalPixel(y, dpr)
-  ctx.fillStyle = '#666'
+  ctx.fillStyle = TEXT_COLORS.WEAK
   ctx.beginPath()
   ctx.arc(endX, alignedY, dotRadius, 0, Math.PI * 2)
   ctx.fill()
@@ -56,7 +54,7 @@ function drawPriceMarker(
   ctx.font = '12px Arial'
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
-  ctx.fillStyle = '#333'
+  ctx.fillStyle = TEXT_COLORS.NEUTRAL
   ctx.fillText(
     text,
     roundToPhysicalPixel(x + lineLength + padding, dpr),
@@ -147,7 +145,7 @@ export function kLineDraw(
     const alignedRect = alignRect(rectX, rawRectY, option.kWidth, rawRectHeight, dpr)
 
     const trend: kLineTrend = getKLineTrend(e)
-    const color = trend === 'up' ? UP_COLOR : DOWN_COLOR
+    const color = trend === 'up' ? PRICE_COLORS.UP : PRICE_COLORS.DOWN
 
     // ===== 绘制实体 =====
     ctx.fillStyle = color

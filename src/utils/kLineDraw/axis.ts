@@ -2,6 +2,7 @@ import type { KLineData } from '@/types/price'
 import { priceToY, yToPrice } from '../priceToY'
 import { alignToPhysicalPixelCenter, roundToPhysicalPixel } from '@/core/draw/pixelAlign'
 import { formatYMDShanghai, formatMonthOrYear, monthKey, findMonthBoundaries } from '@/utils/dateFormat'
+import { TAG_BG_COLORS, BORDER_COLORS, TEXT_COLORS, CROSSHAIR_COLORS, getTickColor } from '@/core/theme/colors'
 
 export interface PriceAxisOptions {
     x: number
@@ -34,9 +35,9 @@ export function drawPriceAxis(ctx: CanvasRenderingContext2D, opts: PriceAxisOpti
         yPaddingPx = 0,
         dpr,
         ticks = 10,
-        bgColor = 'rgba(255,255,255,0.85)',
-        textColor = 'rgba(0,0,0,0.65)',
-        lineColor = 'rgba(0,0,0,0.12)',
+        bgColor = TAG_BG_COLORS.WHITE,
+        textColor = TEXT_COLORS.SECONDARY,
+        lineColor = BORDER_COLORS.DARK,
         fontSize = 16,
         paddingX = 12,
         drawLeftBorder = true,
@@ -188,9 +189,9 @@ export function drawCrosshairTimeLabel(ctx: CanvasRenderingContext2D, opts: Cros
         crosshairX,
         timestamp,
         dpr,
-        bgColor = 'rgba(0,0,0,0.55)',
-        textColor = 'rgba(255,255,255,0.92)',
-        fontSize = 12,
+        bgColor = TAG_BG_COLORS.WHITE,
+        textColor = TEXT_COLORS.PRIMARY,
+        fontSize = 16,
         paddingX = 8,
         paddingY = 4,
     } = opts
@@ -202,7 +203,7 @@ export function drawCrosshairTimeLabel(ctx: CanvasRenderingContext2D, opts: Cros
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'center'
 
-    const tw = Math.ceil(ctx.measureText(text).width)
+    const tw = Math.round(ctx.measureText(text).width)
     const rectW = Math.min(width, tw + paddingX * 2)
     const rectH = Math.min(height, fontSize + paddingY * 2)
 
@@ -215,7 +216,7 @@ export function drawCrosshairTimeLabel(ctx: CanvasRenderingContext2D, opts: Cros
     ctx.fillStyle = bgColor
     ctx.fillRect(
         roundToPhysicalPixel(rectX, dpr),
-        roundToPhysicalPixel(rectY, dpr),
+        0,
         roundToPhysicalPixel(rectW, dpr),
         roundToPhysicalPixel(rectH, dpr),
     )
@@ -240,10 +241,10 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
         priceRange,
         yPaddingPx = 0,
         dpr,
-        bgColor = 'rgb(0,0,0)',
-        textColor = 'rgba(255,255,255,0.92)',
-        fontSize = 12,
-        paddingX = 12,
+        bgColor = TAG_BG_COLORS.WHITE,
+        textColor = TEXT_COLORS.PRIMARY,
+        fontSize = 16,
+        paddingX = 8,
         lastPrice,
     } = opts
 
@@ -262,7 +263,7 @@ export function drawCrosshairPriceLabel(ctx: CanvasRenderingContext2D, opts: Cro
         const changePercent = (change / lastPrice) * 100
         const sign = change >= 0 ? '+' : ''
         changeText = ` ${sign}${changePercent.toFixed(2)}%`
-        changeColor = change >= 0 ? 'rgba(214, 10, 34, 0.92)' : 'rgb(29, 190, 0)' // 红涨绿跌
+        changeColor = getTickColor(changePercent) // 红涨绿跌
     }
 
     const text = priceText + changeText
@@ -314,7 +315,7 @@ export function drawLastPriceDashedLine(ctx: CanvasRenderingContext2D, opts: Las
         lastPrice,
         yPaddingPx = 0,
         dpr,
-        color = 'rgba(0,0,0,0.28)',
+        color = CROSSHAIR_COLORS.LINE,
     } = opts
 
     const { maxPrice, minPrice } = priceRange
@@ -354,11 +355,11 @@ export function drawTimeAxis(ctx: CanvasRenderingContext2D, opts: TimeAxisOption
         startIndex,
         endIndex,
         dpr,
-        bgColor = 'rgba(255,255,255,0.85)',
-        textColor = 'rgba(0,0,0,0.65)',
-        lineColor = 'rgba(0,0,0,0.12)',
+        bgColor = TAG_BG_COLORS.WHITE,
+        textColor = TEXT_COLORS.SECONDARY,
+        lineColor = BORDER_COLORS.DARK,
         fontSize = 16,
-        paddingX = 12,
+        paddingX = 8,
         drawTopBorder = true,
         drawBottomBorder = true,
     } = opts

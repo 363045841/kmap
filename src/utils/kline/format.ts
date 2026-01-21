@@ -2,10 +2,11 @@ import type { KLineData } from '@/types/price'
 
 // 重新导出日期格式化函数以保持向后兼容
 export { formatShanghaiDate } from '@/utils/dateFormat'
+import { PRICE_COLORS } from '@/core/theme/colors'
 
-export const UP_COLOR = 'rgba(214, 10, 34, 1)'
-export const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
-export const NEUTRAL_COLOR = 'rgba(0, 0, 0, 0.78)'
+export const UP_COLOR = PRICE_COLORS.UP
+export const DOWN_COLOR = PRICE_COLORS.DOWN
+export const NEUTRAL_COLOR = PRICE_COLORS.NEUTRAL
 
 export function getUpDownColor(delta: number): string {
     if (delta > 0) return UP_COLOR
@@ -50,4 +51,3 @@ export function calcChangeColor(k: KLineData): string {
     if (typeof k.changeAmount === 'number') return getUpDownColor(k.changeAmount)
     return NEUTRAL_COLOR
 }
-

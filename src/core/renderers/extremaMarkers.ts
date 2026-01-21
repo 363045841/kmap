@@ -1,5 +1,6 @@
 import type { PaneRenderer } from '@/core/layout/pane'
 import { roundToPhysicalPixel, createHorizontalLineRect } from '@/core/draw/pixelAlign'
+import { TEXT_COLORS } from '@/core/theme/colors'
 
 /**
  * 可视区最高/最低价标注（仅绘制标注，不绘制蜡烛）。
@@ -74,14 +75,14 @@ function drawPriceMarker(ctx: CanvasRenderingContext2D, x: number, y: number, pr
     }
     const lineRect = createHorizontalLineRect(lineStartX, lineEndX, y, dpr)
     if (lineRect) {
-        ctx.fillStyle = 'rgba(0,0,0,0.45)'
+        ctx.fillStyle = TEXT_COLORS.WEAK
         ctx.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height)
     }
 
     // 末端点
     const endX = roundToPhysicalPixel(lineEndX, dpr)
     const alignedY = roundToPhysicalPixel(y, dpr)
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'
+    ctx.fillStyle = TEXT_COLORS.WEAK
     ctx.beginPath()
     ctx.arc(endX, alignedY, dotRadius, 0, Math.PI * 2)
     ctx.fill()
@@ -89,7 +90,7 @@ function drawPriceMarker(ctx: CanvasRenderingContext2D, x: number, y: number, pr
     // 文本
     ctx.font = '12px Arial'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = 'rgba(0,0,0,0.70)'
+    ctx.fillStyle = TEXT_COLORS.NEUTRAL
 
     if (drawLeft) {
         // 向左绘制

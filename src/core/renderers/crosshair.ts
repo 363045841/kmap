@@ -1,4 +1,5 @@
 import { createHorizontalLineRect, createVerticalLineRect } from '@/core/draw/pixelAlign'
+import { CROSSHAIR_COLORS } from '@/core/theme/colors'
 
 /**
  * 十字线渲染（屏幕坐标系）：
@@ -25,8 +26,7 @@ export function drawCrosshair(args: {
     ctx.rect(0, 0, plotWidth, plotHeight)
     ctx.clip()
 
-    const color = 'rgba(0,0,0,0.28)'
-    ctx.fillStyle = color
+    ctx.fillStyle = CROSSHAIR_COLORS.LINE
 
     if (drawVertical) {
         const v = createVerticalLineRect(x, 0, plotHeight, dpr)

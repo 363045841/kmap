@@ -1,4 +1,5 @@
 import { alignToPhysicalPixelCenter } from '@/core/draw/pixelAlign'
+import { BORDER_COLORS } from '@/core/theme/colors'
 
 export function drawPaneBorders(args: {
     ctx: CanvasRenderingContext2D
@@ -16,7 +17,7 @@ export function drawPaneBorders(args: {
         dpr,
         width,
         panes,
-        color = 'rgba(0,0,0,0.12)',
+        color = BORDER_COLORS.DARK,
         omitOuterTop = false,
         omitOuterRight = false,
         omitOuterBottom = false,

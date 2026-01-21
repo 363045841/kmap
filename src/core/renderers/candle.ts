@@ -1,9 +1,7 @@
 import type { PaneRenderer } from '@/core/layout/pane'
 import { getKLineTrend, type kLineTrend } from '@/types/kLine'
 import { alignRect, createVerticalLineRect } from '@/core/draw/pixelAlign'
-
-const UP_COLOR = 'rgba(214, 10, 34, 1)'
-const DOWN_COLOR = 'rgba(3, 123, 102, 1)'
+import { PRICE_COLORS } from '@/core/theme/colors'
 
 /**
  * 最小 Candle 渲染器：依赖 pane.yAxis 做 price->y。
@@ -33,7 +31,7 @@ export const CandleRenderer: PaneRenderer = {
             const alignedRect = alignRect(rectX, rawRectY, kWidth, rawRectH, dpr)
 
             const trend: kLineTrend = getKLineTrend(e)
-            const color = trend === 'up' ? UP_COLOR : DOWN_COLOR
+            const color = trend === 'up' ? PRICE_COLORS.UP : PRICE_COLORS.DOWN
 
             ctx.fillStyle = color
             ctx.fillRect(alignedRect.x, alignedRect.y, alignedRect.width, alignedRect.height)

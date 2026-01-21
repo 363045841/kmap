@@ -1,6 +1,7 @@
 import type { PaneRenderer } from '@/core/layout/pane'
 import { createHorizontalLineRect, createVerticalLineRect } from '@/core/draw/pixelAlign'
 import { findMonthBoundaries } from '@/utils/dateFormat'
+import { GRID_COLORS } from '@/core/theme/colors'
 
 /**
  * 仅绘制网格线（不绘制任何文字刻度）。
@@ -12,13 +13,11 @@ export const GridLinesRenderer: PaneRenderer = {
         if (!data.length) return
 
         const unit = kWidth + kGap
-        const gridColor = 'rgba(0,0,0,0.06)'
-
         // 根据 pane 类型确定水平网格线数量：主图 6 条，副图 2 条
         const tickCount = pane.id === 'main' ? 6 : 2
 
         ctx.save()
-        ctx.fillStyle = gridColor
+        ctx.fillStyle = GRID_COLORS.HORIZONTAL
 
         // world 坐标系（跟随滚动）
         ctx.translate(-scrollLeft, 0)
