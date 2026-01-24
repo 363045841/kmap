@@ -23,7 +23,6 @@ export function genRandomPriceData(count: number): KLineData[] {
       close: close,
     })
   }
-  console.log(data)
   return data
 }
 

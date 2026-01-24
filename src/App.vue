@@ -1,9 +1,11 @@
 <template>
   <KLineChart
     :data="kdata"
-    :kWidth="10"
-    :kGap="2"
+    :kWidth="6"
+    :kGap="3"
     :yPaddingPx="24"
+    :minKWidth="2"
+    :maxKWidth="50"
     :showMA="{ ma5: true, ma10: true, ma20: true, ma30: true, ma60: true }"
     :autoScrollToRight="true"
   />
@@ -24,7 +26,7 @@ onMounted(async () => {
   const raw = await getKlineDataDongCai({
     symbol: '601360',
     period: 'daily',
-    start_date: '20250101',
+    start_date: '20210101',
     end_date: nowdate,
     adjust: 'qfq',
   })

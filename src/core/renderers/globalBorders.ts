@@ -30,9 +30,6 @@ export function drawAllPanesBorders(args: {
     outerTop = Number.isFinite(outerTop) ? outerTop : 0
     outerBottom = Number.isFinite(outerBottom) ? outerBottom : 0
 
-    // 输出框线绘制的宽度和高度
-    console.log('框线绘制范围:', { width: plotWidth, height: outerBottom - outerTop })
-
     ctx.beginPath()
 
     // 绘制顶部边框（仅第一个 pane），向内偏移避免裁剪

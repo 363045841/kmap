@@ -333,7 +333,10 @@ export class Chart {
     /**
      * 在给定 mouseX（相对 container 左侧）处做缩放。
      *
-     * 设计目标：缩放后保持 mouseX 指向的“数据索引”尽量稳定（以该点为中心缩放）。
+     * 缩放策略：物理像素空间控制
+     * - 物理kWidth按2步进（保证奇数，影线完美居中）
+     * - 物理kGap固定为3px
+     * - 缩放连续平滑，无跳跃
      *
      * @param mouseX 鼠标相对 container 的 x（逻辑像素）
      * @param scrollLeft 当前 container.scrollLeft
@@ -343,12 +346,33 @@ export class Chart {
         const oldUnit = this.opt.kWidth + this.opt.kGap
         const centerIndex = (scrollLeft + mouseX) / oldUnit
 
-        const delta = deltaY > 0 ? -1 : 1
-        const newKWidth = Math.max(this.opt.minKWidth, Math.min(this.opt.maxKWidth, this.opt.kWidth + delta))
-        if (newKWidth === this.opt.kWidth) return
+        // 获取当前DPR
+        const dpr = this.viewport?.dpr || window.devicePixelRatio || 1
 
-        const ratio = this.opt.kGap / this.opt.kWidth
-        const newKGap = Math.max(0.5, newKWidth * ratio)
+        // 转换到物理像素空间
+        const physKWidth = Math.round(this.opt.kWidth * dpr)
+
+        // 物理kWidth按2步进（保证奇数）
+        const delta = deltaY > 0 ? -2 : 2
+        let newPhysKWidth = physKWidth + delta
+
+        // 确保物理kWidth是奇数（影线完美二等分）
+        if (newPhysKWidth % 2 === 0) {
+            newPhysKWidth += delta > 0 ? 1 : -1
+        }
+
+        // 转换回逻辑像素
+        let newKWidth = newPhysKWidth / dpr
+
+        // 固定物理间距为3px，转换回逻辑像素
+        const PHYS_K_GAP = 3
+        const newKGap = PHYS_K_GAP / dpr
+
+        // 限制在范围内
+        newKWidth = Math.max(this.opt.minKWidth, Math.min(this.opt.maxKWidth, newKWidth))
+
+        // 如果没有变化，直接返回
+        if (Math.abs(newKWidth - this.opt.kWidth) < 0.01) return
 
         this.opt = { ...this.opt, kWidth: newKWidth, kGap: newKGap }
 
