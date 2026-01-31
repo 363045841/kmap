@@ -2,44 +2,38 @@ import type { PaneRenderer } from '@/core/layout/pane'
 import { getKLineTrend, type kLineTrend } from '@/types/kLine'
 import { createAlignedKLineFromPx, createVerticalLineRect } from '@/core/draw/pixelAlign'
 import { PRICE_COLORS } from '@/core/theme/colors'
+import { getPhysicalKLineConfig } from '@/core/chart'
 
 /**
- * 最小 Candle 渲染器：依赖 pane.yAxis 做 price->y。
- * 
- * TradingView级别稳定实现：
- * - 细节A：避免二次round，统一在物理像素空间计算
- * - 细节B：先决定宽度，再推右边界，避免round差异
- * - 细节C：使用fillRect绘制1物理像素宽影线
- * - 细节D改进1：整数px直接累加，避免浮点误差
- * - 细节D改进2：全局统一的奇数化kWidthPx
- * 
- * 使用说明：
- * - kWidth和kGap应来自zoomAt的物理像素控制
- * - (kWidth * dpr) 和 (kGap * dpr) 都应该是整数
- * - 步进和绘制使用统一的kWidthPxOdd，避免不一致
+ * Candle 渲染器：在单个 pane 中绘制 K 线蜡烛图
+ *
+ * 依赖 pane.yAxis 做 price->y 坐标映射，使用物理像素空间计算避免浮点误差
  */
 export const CandleRenderer: PaneRenderer = {
+    /**
+     * 绘制 K 线蜡烛图
+     * @param ctx Canvas 绘图上下文，Chart 已执行 translate(0, pane.top)，y=0 对应 pane 顶部
+     * @param pane 当前 pane 实例
+     * @param data 全量 K 线数据
+     * @param range 当前视口可见的索引范围
+     * @param scrollLeft 滚动偏移量，renderer 内部如需 world 坐标需执行 ctx.translate(-scrollLeft, 0)
+     * @param kWidth K 线宽度
+     * @param kGap K 线间隔
+     * @param dpr 设备像素比
+     * @param _paneWidth pane 宽度（未使用）
+     */
     draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
         if (!data.length) return
 
-        // ============================================================
-        // 改进1：物理像素空间整数步进，避免浮点误差
-        // ============================================================
-        
-        // 全局统一的奇数化kWidthPx（改进2）
-        let kWidthPx = Math.round(kWidth * dpr)
-        if (kWidthPx % 2 === 0) {
-            kWidthPx += 1  // 确保奇数，让影线完美居中
-        }
-        kWidthPx = Math.max(1, kWidthPx)  // 最小1px
-        
-        const kGapPx = Math.round(kGap * dpr)      // 整数间距
-        const unitPx = kWidthPx + kGapPx          // 单元物理宽度（整数）
-        const startXPx = kGapPx                   // 起始物理位置（整数）
+        // 1. 只取渲染宽度用的物理像素值
+        const { kWidthPx } = getPhysicalKLineConfig(kWidth, kGap, dpr)
 
         ctx.save()
-        // world 坐标：平移以实现横向滚动效果
         ctx.translate(-scrollLeft, 0)
+
+        // 2. 位置计算使用原始的 kWidth 和 kGap（与 contentWidth 一致）
+        const unit = kWidth + kGap
+        const startX = kGap
 
         for (let i = range.start; i < range.end && i < data.length; i++) {
             const e = data[i]
@@ -53,25 +47,29 @@ export const CandleRenderer: PaneRenderer = {
             const rawRectY = Math.min(openY, closeY)
             const rawRectH = Math.max(Math.abs(openY - closeY), 1)
 
-            // ============================================================
-            // 改进1：直接用整数px累加，避免浮点误差
-            // ============================================================
-            const leftPx = startXPx + i * unitPx  // 全程整数，无浮点误差
-            const rectX = leftPx / dpr           // 只在最后除回去
-            const physKWidth = kWidthPx / dpr      // 统一的逻辑宽度
+            // 3. 使用原始逻辑像素计算位置
+            const leftLogical = startX + i * unit
 
-            // 使用 createAlignedKLine 统一对齐实体和影线
-            // 传入统一的kWidthPx，避免重复计算和不一致
-            const aligned = createAlignedKLineFromPx(leftPx, rawRectY, kWidthPx, rawRectH, dpr)
+            // 4. 传入物理像素坐标进行对齐
+            const aligned = createAlignedKLineFromPx(
+                Math.round(leftLogical * dpr),
+                rawRectY,
+                kWidthPx,
+                rawRectH,
+                dpr
+            )
 
             const trend: kLineTrend = getKLineTrend(e)
             const color = trend === 'up' ? PRICE_COLORS.UP : PRICE_COLORS.DOWN
 
             ctx.fillStyle = color
-            // 绘制实体
+            // 4. 绘制实体
+            if (i === range.start) {
+                console.log('draw', aligned.bodyRect.x - scrollLeft)
+            }
             ctx.fillRect(aligned.bodyRect.x, aligned.bodyRect.y, aligned.bodyRect.width, aligned.bodyRect.height)
 
-            // 绘制影线（使用统一的对齐坐标）
+            // 5. 绘制影线（使用统一的对齐坐标）
             const wickWidth = aligned.wickRect.width
             const wickX = aligned.wickRect.x
             const bodyTop = aligned.bodyRect.y
@@ -80,7 +78,6 @@ export const CandleRenderer: PaneRenderer = {
             const bodyLow = Math.min(e.open, e.close)
 
             if (e.high > bodyHigh) {
-                // 使用 createVerticalLineRect 确保垂直像素对齐
                 const wick = createVerticalLineRect(wickX, highY, bodyTop, dpr)
                 if (wick) ctx.fillRect(wick.x, wick.y, wickWidth, wick.height)
             }
