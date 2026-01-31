@@ -1,16 +1,19 @@
 # kmap - 金融图表绘制库
 
-这是一个基于 Vue 3 和 Canvas 的金融图表绘制库，专注于提供高性能的 K 线图展示功能。该库支持横向滚动、移动平均线（MA）显示以及从多种数据源（包括 AKTools）获取金融数据。
+[English](README_EN.md) | 简体中文
+
+这是一个基于 Vue 3 和 Canvas 的金融图表绘制库，专注于提供高性能的 K 线图展示功能。该库支持横向滚动、移动平均线（MA）显示以及从多种数据源（包括 **BaoStock**、AKTools）获取金融数据。
 
 ![](https://s2.loli.net/2026/01/25/LObQPXmoN4ZdFey.png)
 
 ## 功能特性
 
 - 📊 **K 线图绘制**：使用 Canvas 实现高性能的 K 线图绘制
+- 🎯 **TradingView 级别稳定**：物理像素控制缩放，影线完美居中，无累积偏移
 - 📈 **移动平均线**：支持 MA5、MA10、MA20 等多种移动平均线显示
 - ↔️ **横向滚动**：支持大量历史数据的横向滚动浏览
 - 🎨 **深色模式**：自动适配系统深色模式
-- 📱 **响应式设计**：适配不同屏幕尺寸
+- 📱 **响应式设计**：适配不同屏幕尺寸，支持所有设备像素比（DPR）
 - ⚡ **高性能**：使用 requestAnimationFrame 优化渲染性能
 
 ## 技术栈
@@ -19,7 +22,9 @@
 - [Vite](https://vite.dev/) - 下一代前端构建工具
 - [TypeScript](https://www.typescriptlang.org/) - JavaScript 类型检查
 - [Canvas API](https://developer.mozilla.org/zh-CN/docs/Web/API/Canvas_API) - 图形绘制
-- [AKTools](https://github.com/akfamily/aktools) - 开源金融数据接口库
+- [BaoStock](http://baostock.com/) - 开源金融数据接口（推荐）
+- [AKTools](https://github.com/akfamily/aktools) - 开源金融数据接口库（存在反爬限制）
+- [Vitest](https://vitest.dev/) - 单元测试框架
 
 ## 项目结构
 
@@ -27,140 +32,122 @@
 src/
 ├── api/                 # API 接口定义
 │   └── data/
-│       └── kLine.ts     # K 线数据接口
+│       ├── kLine.ts     # 东财/AKTools K 线数据接口
+│       └── baostock.ts  # BaoStock K 线数据接口（推荐）
 ├── components/          # 组件
 │   └── KLineChart.vue   # K 线图主组件
+├── core/               # 核心渲染引擎
+│   ├── chart.ts         # 图表控制器
+│   ├── draw/           # 像素对齐工具
+│   │   └── pixelAlign.ts
+│   ├── renderers/      # 渲染器
+│   │   ├── candle.ts   # K 线渲染器
+│   │   └── ...
+│   ├── scale/          # 缩放控制
+│   └── viewport/       # 视口管理
 ├── types/               # 类型定义
 │   ├── kLine.ts         # K 线类型定义
 │   └── price.ts         # 价格类型定义
 ├── utils/               # 工具函数
-│   ├── draw/            # 绘制工具
-│   │   ├── kLine.ts     # K 线绘制
-│   │   └── MA.ts        # 移动平均线绘制
-│   ├── mock/            # 模拟数据生成
-│   ├── logger.ts        # 日志工具
-│   └── priceToY.ts      # 价格转 Y 坐标
+│   ├── kLineDraw/       # K 线绘制工具
+│   ├── kline/           # K 线数据处理
+│   └── mock/            # 模拟数据生成
 ├── stores/              # 状态管理 (Pinia)
 └── assets/              # 静态资源
 ```
 
-## 数据接入
+## 数据源
 
-### AKTools 数据接入
+本项目支持多种数据源，通过统一接口实现无缝切换。
 
-AKTools 是一个开源的金融数据接口库，可以免费获取股票、期货、期权等金融产品的历史数据。
+| 数据源 | 稳定性 | 反爬限制 | 推荐场景 |
+|--------|--------|----------|----------|
+| [BaoStock](http://baostock.com/) | ⭐⭐⭐ 高 | 无 | 生产环境（推荐） |
+| [AKShare](https://github.com/akfamily/akshare) | ⭐⭐ 中 | 有 | 开发测试 |
 
-#### 安装 AKTools
+### BaoStock（推荐）
 
-使用 uv pip 安装:
+BaoStock 是免费开源的 Python 证券数据接口，提供稳定可靠的金融数据服务。
+
+- 官方文档：[http://www.baostock.com/mainContent?file=stockKData.md](http://www.baostock.com/mainContent?file=stockKData.md)
+
+#### 快速开始
 
 ```bash
-# 安装 uv（如果尚未安装）
-pip install uv
+# 安装
+uv pip install baostock
 
-# 使用 uv 安装 AKTools
+# 启动服务（需自行实现服务层或参考 BaoStock 文档）
+python your_baostock_server.py
+```
+
+### AKShare
+
+AKShare 基于 Python 的开源财经数据接口库，数据来源于东方财富等公开渠道。
+
+- GitHub：[https://github.com/akfamily/akshare](https://github.com/akfamily/akshare)
+
+> **⚠️ 注意：** 存在反爬机制，频繁请求可能导致 IP 被封禁
+
+#### 快速开始
+
+```bash
+# 安装
 uv pip install aktools
-```
 
-或者直接使用 pip 安装:
-
-```bash
-pip install aktools
-```
-
-#### 启动 AKTools 数据服务
-
-方法一：使用 uv 直接运行 AKTools
-
-```bash
+# 启动服务
 uv run python -m aktools
-```
 
-方法一（推荐）：通过本项目脚本启动（会自动切换到上级目录的 `aktoolshttp/`）
-
-```bash
+# 或通过本项目脚本启动
 pnpm aktools
 ```
 
-#### 手机访问本机（开发模式）并调用 AKTools API（推荐）
+### 数据接入配置
 
-如果你希望用手机浏览器访问本机正在运行的 `pnpm dev` 页面，同时前端还能调用本机的 AKTools API，推荐使用 **Vite 代理**（避免 CORS，且手机不需要直连 8080）。
+#### Vite 代理配置
 
-本项目已在 `vite.config.ts` 配置：
-
-- dev server 监听 `0.0.0.0`
-- 代理转发：`/api` -> `http://127.0.0.1:8080`
-
-启动步骤：
-
-1. 启动 AKTools（本机 8080）：
-
-   ```bash
-   pnpm aktools
-   ```
-
-2. 启动前端 dev server（允许局域网访问）：
-
-   ```bash
-   pnpm dev:lan
-   ```
-
-3. 查找本机局域网 IP（例如 `192.168.1.23`），手机浏览器访问：
-
-   ```
-   http://192.168.1.23:5173
-   ```
-
-> 说明：前端请求路径保持 `VITE_API_PATH=/api/public/stock_zh_a_hist`，浏览器请求会先到 5173，再由 Vite 代理到本机 8080，因此通常不会遇到跨域问题。
-
-如果你之前在 `.env` 写死了 `VITE_API_BASE_URL=http://127.0.0.1:8080`，手机端会把 `127.0.0.1` 解析成“手机自己”，从而导致 API 连接失败。此时请把 `VITE_API_BASE_URL` 留空（或删除该行），让前端走相对路径并交给 Vite 代理。
-
-方法二：创建自定义后端服务
-除了使用 AKTools 自带的服务外，你也可以根据需要创建自定义的后端服务来处理数据。
-
-#### 配置前端环境变量
-
-在项目根目录创建 `.env` 文件：
-
-```
-VITE_API_BASE_URL=http://127.0.0.1:8080
-VITE_API_PATH=/api/public/stock_zh_a_hist
-```
-
-然后在 [vite.config.ts](file:///d:/Code/kmap/kmap/vite.config.ts) 中确保环境变量被正确加载：
+本项目已配置双数据源代理：
 
 ```ts
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-
-export default defineConfig({
-  plugins: [vue()],
-  define: {
-    'process.env': process.env,
+// vite.config.ts
+proxy: {
+  '/api/stock': {          // BaoStock (端口 8000)
+    target: 'http://127.0.0.1:8000',
+    changeOrigin: true,
   },
-})
-```
-
-### 数据格式
-
-K 线数据需要包含以下字段：
-
-```ts
-interface KLineDailyDongCaiResponse {
-  日期: string // 日期
-  股票代码: string // 股票代码
-  开盘: number // 开盘价
-  收盘: number // 收盘价
-  最高: number // 最高价
-  最低: number // 最低价
-  成交量: number // 成交量
-  成交额: number // 成交额
-  振幅: number // 振幅
-  涨跌幅: number // 涨跌幅
-  涨跌额: number // 涨跌额
-  换手率: number // 换手率
+  '/api/public': {         // AKTools (端口 8080)
+    target: 'http://127.0.0.1:8080',
+    changeOrigin: true,
+  },
 }
 ```
+
+#### 统一接口使用
+
+```vue
+<script setup lang="ts">
+import { fetchKLineData, type KLineDataSourceConfig } from '@/api/data'
+
+const DATA_SOURCE: 'baostock' | 'dongcai' = 'baostock'
+
+const config: KLineDataSourceConfig = {
+  symbol: '601360',        // 统一格式：纯代码
+  startDate: '2024-01-01', // 统一格式：YYYY-MM-DD
+  endDate: '2024-12-31',
+  period: 'daily',
+  adjust: 'qfq',
+}
+
+const data = await fetchKLineData(DATA_SOURCE, config)
+</script>
+```
+
+#### 股票代码格式
+
+| 市场 | 格式 | 示例 |
+|------|------|------|
+| 沪市A股 | `sh.` | `sh.600000` |
+| 深市A股 | `sz.` | `sz.000001` |
 
 ## 使用方法
 
@@ -178,6 +165,8 @@ pnpm dev
 
 ### 3. 在组件中使用 K 线图
 
+#### 方式一：使用 BaoStock 数据源（推荐）
+
 ```vue
 <template>
   <KLineChart
@@ -193,20 +182,57 @@ pnpm dev
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import KLineChart from '@/components/KLineChart.vue'
-import { getKlineDataDongCai } from '@/api/data/kLine'
-import { toKLineData, type KLineData } from '@/types/price'
+import { getKlineDataBaoStock } from '@/api/data/baostock'
+import type { KLineData } from '@/types/price'
+import { cache } from '@/utils/cache'
 
 const klineData = ref<KLineData[]>([])
 
 onMounted(async () => {
+  const params = {
+    symbol: 'sh.601360',      // 三六零股票代码（带市场前缀）
+    start_date: '2024-01-01', // YYYY-MM-DD 格式
+    end_date: '2024-12-31',
+    period: 'daily' as const,
+    adjust: 'qfq' as const,   // 前复权
+  }
+
+  // 缓存键
+  const cacheKey = `kline:${params.symbol}:${params.start_date}:${params.end_date}`
+
+  // 先尝试从缓存获取（1小时有效期）
+  const cached = cache.get<KLineData[]>(cacheKey)
+  if (cached) {
+    klineData.value = cached
+    return
+  }
+
+  // 从 API 获取
+  const data = await getKlineDataBaoStock(params)
+  klineData.value = data
+
+  // 存入缓存
+  cache.set(cacheKey, data)
+})
+</script>
+```
+
+#### 方式二：使用 AKTools 数据源
+
+```vue
+<script setup lang="ts">
+import { getKlineDataDongCai } from '@/api/data/kLine'
+import { toKLineData } from '@/types/price'
+
+onMounted(async () => {
   const raw = await getKlineDataDongCai({
-    symbol: '601360', // 三六零股票代码
+    symbol: '601360',
     period: 'daily',
-    start_date: '20250501',
+    start_date: '20250501',   // YYYYMMDD 格式
     end_date: '20251230',
-    adjust: 'qfq', // 前复权
+    adjust: 'qfq',
   })
-  klineData.value = toKLineData(raw) // 转换并排序数据
+  klineData.value = toKLineData(raw)
 })
 </script>
 ```
@@ -221,13 +247,6 @@ onMounted(async () => {
 | yPaddingPx        | number      | 60                                    | Y 轴上下留白像素               |
 | showMA            | MAFlags     | { ma5: true, ma10: true, ma20: true } | 是否显示移动平均线             |
 | autoScrollToRight | boolean     | true                                  | 数据更新后是否自动滚动到最右侧 |
-
-## 性能优化
-
-- 使用 `requestAnimationFrame` 优化渲染性能
-- 对于滚动等高频事件，使用 passive 模式提升响应性能
-- Canvas 绘制时使用设备像素比（devicePixelRatio）确保在高分屏上清晰显示
-- 通过路径重置（beginPath）避免路径污染
 
 ## 环境要求
 
@@ -252,25 +271,52 @@ pnpm preview
 
 ## API 接口说明
 
+### getKlineDataBaoStock
+
+从 BaoStock 获取 K 线数据（推荐）。
+
+**参数:**
+
+```ts
+interface BaoStockKLineRequest {
+  symbol: string              // 股票代码，格式：sh.600000 或 sz.000001
+  start_date: string          // 开始日期，格式：YYYY-MM-DD
+  end_date: string            // 结束日期，格式：YYYY-MM-DD
+  period?: 'daily' | 'weekly' | 'monthly' | '5' | '15' | '30' | '60'
+  adjust?: 'qfq' | 'hfq' | 'none'  // qfq: 前复权, hfq: 后复权, none: 不复权
+  timeout?: number            // 超时时间（秒）
+}
+```
+
+**返回值:**
+`Promise<KLineData[]>` - 已转换为标准格式的 K 线数据数组
+
+**特性:**
+- ✅ 支持 1 小时本地缓存
+- ✅ 无反爬限制
+- ✅ 数据自动按时间排序
+
 ### getKlineDataDongCai
 
-获取 K 线数据的异步函数。
+从 AKTools/东方财富获取 K 线数据。
+
+> **⚠️ 注意：** 此接口依赖 AKShare，存在反爬机制，频繁请求可能导致 IP 被封禁。
 
 **参数:**
 
 ```ts
 interface KLineDailyDongCaiRequest {
-  symbol: string // 股票代码
+  symbol: string              // 股票代码
   period: 'daily' | 'weekly' | 'monthly' // 周期
-  start_date: string // 开始日期，格式：YYYYMMDD
-  end_date: string // 结束日期，格式：YYYYMMDD
-  adjust?: 'qfq' | 'hfq' // 复权方式，qfq: 前复权, hfq: 后复权
-  timeout?: number // 超时时间（秒）
+  start_date: string          // 开始日期，格式：YYYYMMDD
+  end_date: string            // 结束日期，格式：YYYYMMDD
+  adjust?: 'qfq' | 'hfq'      // 复权方式，qfq: 前复权, hfq: 后复权
+  timeout?: number            // 超时时间（秒）
 }
 ```
 
 **返回值:**
-`Promise<KLineDailyDongCaiResponse[]>` - K 线数据数组
+`Promise<KLineDailyDongCaiResponse[]>` - K 线数据数组（需调用 `toKLineData()` 转换）
 
 ## 贡献
 
@@ -284,5 +330,8 @@ interface KLineDailyDongCaiRequest {
 
 - [Vue.js 官方文档](https://vuejs.org/guide/introduction.html)
 - [Vite 官方文档](https://vite.dev/guide/)
+- [BaoStock 官方文档](http://baostock.com/)
 - [AKTools 官方文档](https://github.com/akfamily/aktools)
+- [AKShare 官方文档](https://akshare.akfamily.xyz/)
 - [Canvas API MDN 文档](https://developer.mozilla.org/zh-CN/docs/Web/API/Canvas_API)
+- [Vitest 官方文档](https://vitest.dev/)

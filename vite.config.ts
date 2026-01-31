@@ -24,7 +24,13 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     proxy: {
-      '/api': {
+      // baostock 数据源 (端口 8000)
+      '/api/stock': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      // 东财等 AKTools 数据源 (端口 8080)
+      '/api/public': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
