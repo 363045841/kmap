@@ -7,7 +7,7 @@ import { tagLogThrottle } from '@/utils/logger'
  * 副图成交量渲染器
  */
 export const subVolumeRenderer: PaneRenderer = {
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth, kLinePositions }) {
         if (!data.length) return
         tagLogThrottle('range', range, "range")
 
@@ -15,7 +15,6 @@ export const subVolumeRenderer: PaneRenderer = {
         ctx.translate(-scrollLeft, 0)
 
         const { start, end } = range
-        let x = kGap
         const maxVolume =
             data.slice(start, end)
                 .reduce((max, e) => {
@@ -30,8 +29,9 @@ export const subVolumeRenderer: PaneRenderer = {
             const volume = item.volume
             if (!volume) continue
             const color = judgeColor(item)
+            const x = kLinePositions[i - start]
+            if (!x) continue
             drawVolume(ctx, x, color, volume, maxVolume, kWidth, pane.height)
-            x += kWidth + kGap
         }
     }
 }

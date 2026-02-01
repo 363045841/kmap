@@ -1,5 +1,4 @@
 <template>
-  <!-- 外层 wrapper 负责在父容器中居中整个图表 -->
   <div class="chart-wrapper">
     <div
       class="chart-container"
@@ -51,6 +50,8 @@ import { GridLinesRenderer } from '@/core/renderers/gridLines'
 import { LastPriceLineRenderer } from '@/core/renderers/lastPrice'
 import { createMARenderer } from '@/core/renderers/ma'
 import { ExtremaMarkersRenderer } from '@/core/renderers/extremaMarkers'
+import { subVolumeRenderer } from '@/core/renderers/subVolume'
+import { tagLog } from '@/utils/logger'
 
 type MAFlags = {
   ma5?: boolean
@@ -308,7 +309,7 @@ onMounted(() => {
     scheduleRender()
   })
 
-  // 主/副 pane
+  // 注册 Pane 渲染器
   chart.setPaneRenderers('main', [
     GridLinesRenderer,
     LastPriceLineRenderer,
@@ -316,8 +317,7 @@ onMounted(() => {
     ExtremaMarkersRenderer,
     createMARenderer(props.showMA),
   ])
-  // 副图暂不画任何数据：后续接入 MACD/成交量等 renderer
-  chart.setPaneRenderers('sub', [GridLinesRenderer])
+  chart.setPaneRenderers('sub', [GridLinesRenderer, subVolumeRenderer])
 
   chartRef.value = chart
   chart.updateData(props.data)

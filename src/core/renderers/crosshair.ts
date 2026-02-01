@@ -34,6 +34,7 @@ export function drawCrosshair(args: {
 
     if (drawVertical) {
         const v = createVerticalLineRect(x, 0, plotHeight, dpr)
+        console.log('realX', v!.x)
         if (v) ctx.fillRect(v.x, v.y, v.width, v.height)
     }
 

@@ -6,6 +6,7 @@
     :style="{ left: `${pos.x}px`, top: `${pos.y}px` }"
   >
     <div class="kline-tooltip__title">
+      <!-- <span>{{ props.index }}</span> -->
       <span v-if="k.stockCode">{{ k.stockCode }}</span>
       <span>{{ formatShanghaiDate(k.timestamp) }}</span>
     </div>

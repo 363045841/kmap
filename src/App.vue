@@ -1,7 +1,7 @@
 <template>
   <KLineChart
     :data="kdata"
-    :kWidth="6"
+    :kWidth="7"
     :kGap="3"
     :yPaddingPx="24"
     :minKWidth="2"

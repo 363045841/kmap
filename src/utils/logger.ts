@@ -20,3 +20,19 @@ export function tagLog(level: TagLevel | string, value: unknown) {
   const lv: TagLevel = isTagLevel(level) ? level : 'info'
   console.log(`%c${level}%c`, `${leftBase}${tagStyle[lv]}`, rightBase, value)
 }
+
+// 节流版 tagLog
+const throttleMap = new Map<string, number>()
+
+export function tagLogThrottle(
+  level: TagLevel | string,
+  value: unknown,
+  key: string,
+  wait = 1000
+) {
+  const now = Date.now()
+  const last = throttleMap.get(key) ?? 0
+  if (now - last < wait) return
+  throttleMap.set(key, now)
+  tagLog(level, value)
+}
