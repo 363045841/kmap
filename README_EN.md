@@ -1,30 +1,35 @@
 # kmap - Financial Charting Library
 
-[English](README_EN.md) | 简体中文
+English | [简体中文](README.md)
 
 A financial charting library based on Vue 3 and Canvas, focusing on high-performance K-line (candlestick) chart rendering. The library supports horizontal scrolling, moving average (MA) display, and financial data retrieval from multiple sources including **BaoStock** and AKTools.
 
-![](https://s2.loli.net/2026/01/25/LObQPXmoN4ZdFey.png)
+<img src="https://s2.loli.net/2026/02/01/7j9uHWIvrAGxFBC.png" alt="Example" style="border-radius: 8px;">
 
 ## Features
 
-- 📊 **K-line Chart**: High-performance K-line chart rendering using Canvas
-- 🎯 **TradingView-level Stability**: Physical pixel control scaling, perfect wick centering, no cumulative offset
-- 📈 **Moving Average**: Support for MA5, MA10, MA20 and other moving average lines
-- ↔️ **Horizontal Scrolling**: Browse large amounts of historical data with horizontal scrolling
-- 🎨 **Dark Mode**: Automatically adapts to system dark mode
-- 📱 **Responsive Design**: Adapts to different screen sizes, supports all device pixel ratios (DPR)
-- ⚡ **High Performance**: Optimized rendering with requestAnimationFrame
+- **Canvas-based**: High-performance K-line chart rendering using Canvas
+- **Responsive Design**: Adapts to different screen sizes, supports all device pixel ratios (DPR) for crisp rendering on any display
+- **Framework-agnostic**: Core logic is completely independent, not tied to any specific framework
 
 ## Tech Stack
 
 - [Vue 3](https://vuejs.org/) - Progressive JavaScript Framework
-- [Vite](https://vite.dev/) - Next-generation frontend build tool
-- [TypeScript](https://www.typescriptlang.org/) - JavaScript type checking
-- [Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) - Graphics rendering
-- [BaoStock](http://baostock.com/) - Open-source financial data API (Recommended)
-- [AKTools](https://github.com/akfamily/aktools) - Open-source financial data API library (Anti-scraping limitations)
+- [Rolldown Vite](https://vite.dev/guide/rolldown) - Next-generation frontend build tool with ultra-fast builds
+- [TypeScript](https://www.typescriptlang.org/)
+- [Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
 - [Vitest](https://vitest.dev/) - Unit testing framework
+
+## Data Sources
+
+- [BaoStock](http://baostock.com/) - Open-source financial data API, supports 100,000 API calls per day
+- [AKTools](https://github.com/akfamily/aktools) - Open-source financial data API library (may have anti-scraping limitations)
+
+## Install via NPM
+
+```bash
+npm i @363045841yyt/klinechart
+```
 
 ## Project Structure
 
@@ -33,20 +38,18 @@ src/
 ├── api/                 # API interface definitions
 │   └── data/
 │       ├── kLine.ts     # DongCai/AKTools K-line data interface
-│       ├── baostock.ts  # BaoStock K-line data interface (Recommended)
-│       ├── types.ts     # Unified data source types
-│       └── unified.ts   # Unified data source entry
+│       └── baostock.ts  # BaoStock K-line data interface (Recommended)
 ├── components/          # Components
 │   └── KLineChart.vue   # K-line chart main component
-├── core/               # Core rendering engine
+├── core/                # Core rendering engine
 │   ├── chart.ts         # Chart controller
-│   ├── draw/           # Pixel alignment tools
+│   ├── draw/            # Pixel alignment tools
 │   │   └── pixelAlign.ts
-│   ├── renderers/      # Renderers
-│   │   ├── candle.ts   # K-line renderer
+│   ├── renderers/       # Renderers
+│   │   ├── candle.ts    # K-line renderer
 │   │   └── ...
-│   ├── scale/          # Scaling control
-│   └── viewport/       # Viewport management
+│   ├── scale/           # Scaling control
+│   └── viewport/        # Viewport management
 ├── types/               # Type definitions
 │   ├── kLine.ts         # K-line type definitions
 │   └── price.ts         # Price type definitions
@@ -58,29 +61,25 @@ src/
 └── assets/              # Static resources
 ```
 
-## Data Sources
-
-This project supports multiple data sources with seamless switching through a unified interface.
-
-| Data Source | Stability | Anti-scraping | Recommended Use |
-|-------------|-----------|---------------|-----------------|
-| [BaoStock](http://baostock.com/) | ⭐⭐⭐ High | None | Production (Recommended) |
-| [AKShare](https://github.com/akfamily/akshare) | ⭐⭐ Medium | Yes | Development/Testing |
-
 ### BaoStock (Recommended)
 
 BaoStock is a free and open-source Python securities data interface providing stable and reliable financial data services.
 
-- Documentation: [http://www.baostock.com/mainContent?file=stockKData.md](http://www.baostock.com/mainContent?file=stockKData.md)
+- Official Documentation: [http://www.baostock.com/mainContent?file=stockKData.md](http://www.baostock.com/mainContent?file=stockKData.md)
 
 #### Quick Start
 
 ```bash
 # Install
 uv pip install baostock
+```
 
-# Start service (implement your own server layer or refer to BaoStock docs)
-python your_baostock_server.py
+Since BaoStock does not provide AkTools backend interface, you need to set up your own FastAPI service:
+```bash
+git clone https://github.com/363045841/stockbao.git
+
+# Start service
+python server.py
 ```
 
 ### AKShare
@@ -89,7 +88,7 @@ AKShare is a Python-based open-source financial data interface library with data
 
 - GitHub: [https://github.com/akfamily/akshare](https://github.com/akfamily/akshare)
 
-> **⚠️ Note:** Anti-scraping mechanisms exist. Frequent requests may result in IP bans.
+> **⚠️ Note:** This library connects directly to API, which may trigger anti-scraping mechanisms. Frequent requests may result in IP bans.
 
 #### Quick Start
 
@@ -100,15 +99,15 @@ uv pip install aktools
 # Start service
 uv run python -m aktools
 
-# Or use project script
+# Or start via project script
 pnpm aktools
 ```
 
-### Data Integration Configuration
+### Backend Data Source Configuration
 
 #### Vite Proxy Configuration
 
-Dual data source proxy is pre-configured:
+This project has configured dual data source proxy:
 
 ```ts
 // vite.config.ts
@@ -132,9 +131,10 @@ import { fetchKLineData, type KLineDataSourceConfig } from '@/api/data'
 
 const DATA_SOURCE: 'baostock' | 'dongcai' = 'baostock'
 
+// AKshare requires date in YYYYMMDD format, BaoStock requires date in YYYY-MM-DD format
 const config: KLineDataSourceConfig = {
-  symbol: '601360',        // Unified format: pure code
-  startDate: '2024-01-01', // Unified format: YYYY-MM-DD
+  symbol: '601360',
+  startDate: '2024-01-01',
   endDate: '2024-12-31',
   period: 'daily',
   adjust: 'qfq',
@@ -143,23 +143,6 @@ const config: KLineDataSourceConfig = {
 const data = await fetchKLineData(DATA_SOURCE, config)
 </script>
 ```
-
-#### Stock Code Format
-
-| Market | Format | Example |
-|--------|--------|---------|
-| Shanghai A-Shares | `sh.` | `sh.600000` |
-| Shenzhen A-Shares | `sz.` | `sz.000001` |
-
-#### Mobile Development
-
-For mobile browser access to local dev server:
-
-1. Start data service (BaoStock on 8000 or AKTools on 8080)
-2. Start frontend with LAN access: `pnpm dev:lan`
-3. Access via mobile: `http://<your-ip>:5173`
-
-> Frontend requests go through Vite proxy to avoid CORS issues.
 
 ## Usage
 
@@ -194,32 +177,36 @@ pnpm dev
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import KLineChart from '@/components/KLineChart.vue'
-import { fetchKLineData, type KLineDataSourceConfig } from '@/api/data'
+import { getKlineDataBaoStock } from '@/api/data/baostock'
 import type { KLineData } from '@/types/price'
 import { cache } from '@/utils/cache'
 
 const klineData = ref<KLineData[]>([])
-const DATA_SOURCE: 'baostock' | 'dongcai' = 'baostock'
 
 onMounted(async () => {
-  const config: KLineDataSourceConfig = {
-    symbol: '601360',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
-    period: 'daily',
-    adjust: 'qfq',
+  const params = {
+    symbol: 'sh.601360',      // 360 Stock Code (with market prefix)
+    start_date: '2024-01-01', // YYYY-MM-DD format
+    end_date: '2024-12-31',
+    period: 'daily' as const,
+    adjust: 'qfq' as const,   // Forward adjusted
   }
 
-  const cacheKey = `kline:${DATA_SOURCE}:${config.symbol}:${config.startDate}:${config.endDate}`
+  // Cache key
+  const cacheKey = `kline:${params.symbol}:${params.start_date}:${params.end_date}`
 
+  // Try to get from cache first (1 hour validity)
   const cached = cache.get<KLineData[]>(cacheKey)
   if (cached) {
     klineData.value = cached
     return
   }
 
-  const data = await fetchKLineData(DATA_SOURCE, config)
+  // Fetch from API
+  const data = await getKlineDataBaoStock(params)
   klineData.value = data
+
+  // Store in cache
   cache.set(cacheKey, data)
 })
 </script>
@@ -261,7 +248,7 @@ onMounted(async () => {
 - Node.js: ^20.19.0 || >=22.12.0
 - pnpm: Package manager
 - Python: For running AKTools service (optional)
-- uv: Python package and runner (for `pnpm aktools`, optional but recommended)
+- uv: Python package manager
 
 ## Build & Deployment
 
@@ -277,77 +264,6 @@ pnpm build
 pnpm preview
 ```
 
-## API Documentation
-
-### fetchKLineData
-
-Unified async function to get K-line data from multiple sources.
-
-**Parameters:**
-
-```ts
-// Data source type
- type: 'baostock' | 'dongcai'
-
-// Unified configuration
-interface KLineDataSourceConfig {
-  symbol: string              // Stock code (pure code without prefix)
-  startDate: string           // Start date, format: YYYY-MM-DD
-  endDate: string             // End date, format: YYYY-MM-DD
-  period: 'daily' | 'weekly' | 'monthly' | '5min' | '15min' | '30min' | '60min'
-  adjust: 'qfq' | 'hfq' | 'none'
-  timeout?: number            // Timeout (seconds)
-}
-```
-
-**Return Value:**
-`Promise<KLineData[]>` - Standardized K-line data array
-
-**Features:**
-- ✅ Supports 1-hour local caching
-- ✅ Unified interface for multiple data sources
-- ✅ Automatic data format conversion
-- ✅ Automatic time sorting
-
-### getKlineDataBaoStock
-
-Direct access to BaoStock API (internal use).
-
-**Parameters:**
-
-```ts
-interface BaoStockKLineRequest {
-  symbol: string              // Stock code with prefix: sh.600000 or sz.000001
-  start_date: string          // Start date, format: YYYY-MM-DD
-  end_date: string            // End date, format: YYYY-MM-DD
-  period?: 'daily' | 'weekly' | 'monthly' | '5' | '15' | '30' | '60'
-  adjust?: 'qfq' | 'hfq' | 'none'
-  timeout?: number
-}
-```
-
-### getKlineDataDongCai
-
-Direct access to AKTools/East Money API (internal use).
-
-> **⚠️ Note:** This interface depends on AKShare with anti-scraping mechanisms. Frequent requests may result in IP bans.
-
-**Parameters:**
-
-```ts
-interface KLineDailyDongCaiRequest {
-  symbol: string
-  period: 'daily' | 'weekly' | 'monthly'
-  start_date: string          // Format: YYYYMMDD
-  end_date: string            // Format: YYYYMMDD
-  adjust?: 'qfq' | 'hfq'
-  timeout?: number
-}
-```
-
-**Return Value:**
-`Promise<KLineDailyDongCaiResponse[]>` - Raw data array (requires `toKLineData()` conversion)
-
 ## Contributing
 
 Issues and Pull Requests are welcome to improve this project.
@@ -360,8 +276,8 @@ This project is licensed under the MIT License. See [LICENSE](./LICENSE) file fo
 
 - [Vue.js Official Documentation](https://vuejs.org/guide/introduction.html)
 - [Vite Official Documentation](https://vite.dev/guide/)
-- [BaoStock Documentation](http://www.baostock.com/mainContent?file=stockKData.md)
-- [AKShare GitHub](https://github.com/akfamily/akshare)
-- [AKTools Official Documentation](https://github.com/akfamily/aktools)
+- [BaoStock Documentation](http://baostock.com/)
+- [AKTools Documentation](https://github.com/akfamily/aktools)
+- [AKShare Documentation](https://akshare.akfamily.xyz/)
 - [Canvas API MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
-- [Vitest Official Documentation](https://vitest.dev/)
+- [Vitest Documentation](https://vitest.dev/)
