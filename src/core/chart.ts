@@ -7,6 +7,7 @@ import { drawTimeAxisLayer } from '@/core/renderers/timeAxis'
 import { drawCrosshair } from '@/core/renderers/crosshair'
 import { drawMALegend } from '@/core/renderers/maLegend'
 import { drawAllPanesBorders } from '@/core/renderers/globalBorders'
+import { tagLog, tagLogThrottle } from '@/utils/logger'
 
 /**
  * 图表 DOM 元素引用
@@ -24,8 +25,8 @@ export type ChartDom = {
 
 /**
  * Pane 面板配置
- * @param id Pane 标识符
- * @param ratio Pane 高度占比
+ * @property id Pane 标识符
+ * @property ratio Pane 高度占比
  */
 export type PaneSpec = { id: string; ratio: number }
 
@@ -51,6 +52,54 @@ export type ChartOptions = {
     priceLabelWidth?: number
 }
 
+/**
+ * 计算奇数化后的 K 线宽度（物理像素），确保影线能完美居中显示
+ * @param kWidth K 线宽度（逻辑像素）
+ * @param dpr 设备像素比
+ * @returns 奇数化后的物理像素宽度
+ */
+export function calcKWidthPx(kWidth: number, dpr: number): number {
+    let kWidthPx = Math.round(kWidth * dpr)
+    if (kWidthPx % 2 === 0) {
+        kWidthPx += 1
+    }
+    return Math.max(1, kWidthPx)
+}
+
+/**
+ * 获取图表渲染使用的物理像素配置
+ * @param kWidth K 线宽度（逻辑像素）
+ * @param kGap K 线间隙（逻辑像素）
+ * @param dpr 设备像素比
+ * @returns 物理像素和逻辑像素的配置对象
+ */
+export function getPhysicalKLineConfig(kWidth: number, kGap: number, dpr: number) {
+    const kWidthPx = calcKWidthPx(kWidth, dpr)
+    const kGapPx = Math.round(kGap * dpr)
+    const unitPx = kWidthPx + kGapPx
+    const startXPx = kGapPx
+
+    // 1. 转回逻辑像素（供需要逻辑像素的地方使用）
+    const kWidthLogical = kWidthPx / dpr
+    const kGapLogical = kGapPx / dpr
+    const unitLogical = unitPx / dpr
+    const startXLogical = startXPx / dpr
+
+    return {
+        kWidthPx,
+        kGapPx,
+        unitPx,
+        startXPx,
+        kWidthLogical,
+        kGapLogical,
+        unitLogical,
+        startXLogical,
+    }
+}
+
+/** K 线起始 x 坐标数组，positions[i] 表示第 i 根 K 线的起始 x 坐标（逻辑像素） */
+export type KLinePositions = number[]
+
 export type Viewport = {
     viewWidth: number
     viewHeight: number
@@ -73,8 +122,8 @@ export class Chart {
 
     /**
      * 创建图表实例
-     * @param dom 由 Vue 组件传入的 DOM 句柄（container/canvasLayer/三层 canvas）
-     * @param opt 初始配置（kWidth/kGap、轴尺寸、pane 配置等）
+     * @param dom 由 Vue 组件传入的 DOM 句柄
+     * @param opt 初始配置
      */
     constructor(dom: ChartDom, opt: ChartOptions) {
         this.dom = dom
@@ -84,99 +133,7 @@ export class Chart {
         this.initPanes()
     }
 
-
-    // 缩放回调：用于通知外部（Vue）同步 kWidth/kGap 与 scrollLeft
-    private onZoomChange?: (kWidth: number, kGap: number, targetScrollLeft: number) => void
-
-    /**
-     * 注册缩放回调
-     * @param cb (newKWidth, newKGap, targetScrollLeft) => void
-     */
-    setOnZoomChange(cb: (kWidth: number, kGap: number, targetScrollLeft: number) => void) {
-        this.onZoomChange = cb
-    }
-
-
-    /** 获取所有 PaneRenderer */
-    getPaneRenderers(): PaneRenderer[] {
-        return this.paneRenderers
-    }
-
-    /**
-     * 设置某个 pane 的渲染器链
-     * @param paneId pane 标识（例如 'main'/'sub'）
-     * @param renderers 渲染器数组
-     */
-    setPaneRenderers(paneId: string, renderers: Pane['renderers']) {
-        const renderer = this.paneRenderers.find((r) => r.getPane().id === paneId)
-        if (!renderer) return
-        const pane = renderer.getPane()
-        // 清空并替换（保持引用稳定）
-        pane.renderers.length = 0
-        for (const r of renderers) pane.renderers.push(r)
-        this.scheduleDraw()
-    }
-
-    /** 获取 ChartDom（供 InteractionController 等使用） */
-    getDom() {
-        return this.dom
-    }
-
-    /** 获取当前 ChartOptions（注意：返回的是内部当前快照） */
-    getOption() {
-        return this.opt
-    }
-
-    /**
-     * 更新配置并触发布局/重绘
-     * @param partial 配置项
-     */
-    updateOptions(partial: Partial<ChartOptions>) {
-        this.opt = { ...this.opt, ...partial }
-        // panes 变化需要重建布局
-        if (partial.panes) this.initPanes()
-        this.resize()
-    }
-
-    /**
-     * 更新数据并请求重绘
-     * @param data K 线数据数组
-     */
-    updateData(data: KLineData[]) {
-        this.data = data ?? []
-        this.scheduleDraw()
-    }
-
-    /** 获取当前数据源（给 renderers/interaction 使用） */
-    getData(): KLineData[] {
-        return this.data
-    }
-
-    /** 内容总宽度（用于外部 scroll-content 撑开 scrollWidth） */
-    getContentWidth(): number {
-        const n = this.data?.length ?? 0
-        const plotWidth = this.opt.kGap + n * (this.opt.kWidth + this.opt.kGap)
-        const yAxisTotalWidth = this.opt.rightAxisWidth + (this.opt.priceLabelWidth || 60)
-        return plotWidth + yAxisTotalWidth
-    }
-
-    /** 容器尺寸变化时调用 */
-    resize() {
-        this.computeViewport()
-        this.layoutPanes()
-        this.scheduleDraw()
-    }
-
-    /** 请求下一帧重绘（RAF 合并） */
-    scheduleDraw() {
-        if (this.raf != null) cancelAnimationFrame(this.raf)
-        this.raf = requestAnimationFrame(() => {
-            this.raf = null
-            this.draw()
-        })
-    }
-
-    /** 绘制一帧 */
+    /** 绘制一帧完整图表 */
     draw() {
         // 1. 计算视口信息
         const vp = this.computeViewport()
@@ -186,12 +143,12 @@ export class Chart {
         const xAxisCtx = this.dom.xAxisCanvas.getContext('2d')
         if (!xAxisCtx) return
 
-        // 3. 清空 xAxis Canvas + 设置 DPR 缩放
+        // 3. 清空 xAxis Canvas 并设置 DPR 缩放
         xAxisCtx.setTransform(1, 0, 0, 1, 0, 0)
         xAxisCtx.scale(vp.dpr, vp.dpr)
         xAxisCtx.clearRect(0, 0, vp.plotWidth, this.opt.bottomAxisHeight)
 
-        // 4. 计算可视K线数据范围
+        // 4. 计算可视 K 线数据范围
         let { start, end } = getVisibleRange(
             vp.scrollLeft,
             vp.plotWidth,
@@ -202,7 +159,13 @@ export class Chart {
 
         const range: VisibleRange = { start, end }
 
-        // 5. 遍历所有 PaneRenderer，独立绘制每个 pane
+        // 4.1 计算 K 线起始 x 坐标数组
+        const kLinePositions = this.calcKLinePositions(range)
+
+        // 4.2 设置 K 线坐标数组到交互控制器
+        this.interaction.setKLinePositions(kLinePositions, range)
+
+        // 5. 遍历所有 PaneRenderer 独立绘制每个 pane
         const isDragging = this.interaction.isDraggingState()
         for (const renderer of this.paneRenderers) {
             renderer.draw({
@@ -215,10 +178,11 @@ export class Chart {
                 crosshairPos: isDragging ? null : this.interaction.crosshairPos,
                 crosshairIndex: isDragging ? null : this.interaction.crosshairIndex,
                 title: renderer.getPane().id === 'sub' ? '副图(占位)' : undefined,
+                kLinePositions,
             })
         }
 
-        // 6. 绘制 xAxis 时间轴（全局，底部一条）
+        // 6. 绘制 xAxis 时间轴
         drawTimeAxisLayer({
             ctx: xAxisCtx,
             data: this.data,
@@ -234,7 +198,7 @@ export class Chart {
                     : null,
         })
 
-        // 7. 绘制十字线（垂直线在所有 pane 上绘制，水平线只在活跃的 pane 上绘制）
+        // 7. 绘制十字线（垂直线在所有 pane 上绘制，水平线只在活跃 pane 上绘制）
         if (!isDragging && this.interaction.crosshairPos) {
             const { x, y } = this.interaction.crosshairPos
             const activePaneId = this.interaction.activePaneId
@@ -302,15 +266,15 @@ export class Chart {
     /**
      * 以鼠标位置为中心缩放 K 线，保持鼠标指向的 K 线位置不变
      * @param mouseX 鼠标相对 container 左侧的 x 坐标
-     * @param scrollLeft 当前 container.scrollLeft
-     * @param deltaY WheelEvent.deltaY（>0 缩小，<0 放大）
+     * @param scrollLeft 当前 container 的 scrollLeft
+     * @param deltaY 滚动方向（大于 0 缩小，小于 0 放大）
      */
     zoomAt(mouseX: number, scrollLeft: number, deltaY: number) {
-        // 1. 记录缩放中心点（鼠标指向的K线索引）
+        // 1. 记录缩放中心点（鼠标指向的 K 线索引）
         const oldUnit = this.opt.kWidth + this.opt.kGap
         const centerIndex = (scrollLeft + mouseX) / oldUnit
 
-        // 2. 物理像素空间调整kWidth（步进2保证实体可被影线居中等分）
+        // 2. 物理像素空间调整 kWidth（步进 2 保证实体可被影线居中等分）
         const dpr = this.viewport?.dpr || window.devicePixelRatio || 1
         const physKWidth = Math.round(this.opt.kWidth * dpr)
         const delta = deltaY > 0 ? -2 : 2
@@ -319,18 +283,18 @@ export class Chart {
             newPhysKWidth += delta > 0 ? 1 : -1
         }
 
-        // 3. 转回逻辑像素，同步更新kGap（物理固定3px）
+        // 3. 转回逻辑像素，同步更新 kGap（物理固定 3px）
         let newKWidth = newPhysKWidth / dpr
         const PHYS_K_GAP = 3
         const newKGap = PHYS_K_GAP / dpr
 
-        // 4. 限制在kWidth范围内，无变化则直接返回
+        // 4. 限制在 kWidth 范围内，无变化则直接返回
         newKWidth = Math.max(this.opt.minKWidth, Math.min(this.opt.maxKWidth, newKWidth))
         if (Math.abs(newKWidth - this.opt.kWidth) < 0.01) return
 
         this.opt = { ...this.opt, kWidth: newKWidth, kGap: newKGap }
 
-        // 5. 校正滚动位置，使缩放后鼠标仍指向同一根K线
+        // 5. 校正滚动位置，使缩放后鼠标仍指向同一根 K 线
         const newUnit = newKWidth + newKGap
         const newScrollLeft = centerIndex * newUnit - mouseX
 
@@ -339,14 +303,144 @@ export class Chart {
             return
         }
 
-        // 6. 更新DOM并触发重绘
+        // 6. 更新 DOM 并触发重绘
         const container = this.dom.container
         const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
         container.scrollLeft = Math.min(Math.max(0, newScrollLeft), maxScrollLeft)
         this.scheduleDraw()
     }
 
-    /** 销毁 chart */
+
+    /** 缩放回调函数，用于通知外部同步 kWidth、kGap 与 scrollLeft */
+    private onZoomChange?: (kWidth: number, kGap: number, targetScrollLeft: number) => void
+
+    /**
+     * 注册缩放回调函数
+     * @param cb 缩放回调函数
+     */
+    setOnZoomChange(cb: (kWidth: number, kGap: number, targetScrollLeft: number) => void) {
+        this.onZoomChange = cb
+    }
+
+
+    /** 获取所有 PaneRenderer */
+    getPaneRenderers(): PaneRenderer[] {
+        return this.paneRenderers
+    }
+
+    /**
+     * 设置指定 pane 的渲染器链
+     * @param paneId pane 标识（如 'main' 或 'sub'）
+     * @param renderers 渲染器数组
+     */
+    setPaneRenderers(paneId: string, renderers: Pane['renderers']) {
+        const renderer = this.paneRenderers.find((r) => r.getPane().id === paneId)
+        if (!renderer) return
+        const pane = renderer.getPane()
+        // 1. 清空并替换渲染器（保持引用稳定）
+        pane.renderers.length = 0
+        for (const r of renderers) pane.renderers.push(r)
+        this.scheduleDraw()
+    }
+
+    /** 获取 ChartDom（供 InteractionController 使用） */
+    getDom() {
+        return this.dom
+    }
+
+    /** 获取当前 ChartOptions（返回内部当前快照） */
+    getOption() {
+        return this.opt
+    }
+
+    /**
+     * 计算 K 线起始 x 坐标数组，与 candle.ts 的像素对齐方式保持一致
+     * @param range 可见 K 线索引范围
+     * @returns x 坐标数组（逻辑像素，经过物理像素对齐）
+     */
+    calcKLinePositions(range: VisibleRange): KLinePositions {
+        const { start, end } = range
+        const count = end - start
+        const dpr = this.viewport?.dpr || window.devicePixelRatio || 1
+
+        // 1. 使用原始逻辑像素参数（与 CandleRenderer 一致）
+        const unit = this.opt.kWidth + this.opt.kGap
+        const startX = this.opt.kGap
+
+        const positions: number[] = new Array(count)
+
+        for (let i = 0; i < count; i++) {
+            const dataIndex = start + i
+            const leftLogical = startX + dataIndex * unit
+            // 2. 与 CandleRenderer 中的对齐方式一致
+            positions[i] = Math.round(leftLogical * dpr) / dpr
+        }
+
+        tagLogThrottle("pos[]", positions, "pos[]", 5000)
+        return positions
+    }
+
+    /**
+     * 获取 K 线渲染使用的物理像素配置，确保渲染器和交互逻辑使用一致的坐标计算
+     * @returns 物理像素配置对象
+     */
+    getKLinePhysicalConfig() {
+        const dpr = this.viewport?.dpr || window.devicePixelRatio || 1
+        return getPhysicalKLineConfig(this.opt.kWidth, this.opt.kGap, dpr)
+    }
+
+    /**
+     * 更新配置并触发布局/重绘
+     * @param partial 部分配置项
+     */
+    updateOptions(partial: Partial<ChartOptions>) {
+        this.opt = { ...this.opt, ...partial }
+        // 1. panes 变化需要重建布局
+        if (partial.panes) this.initPanes()
+        this.resize()
+    }
+
+    /**
+     * 更新数据并请求重绘
+     * @param data K 线数据数组
+     */
+    updateData(data: KLineData[]) {
+        this.data = data ?? []
+        this.scheduleDraw()
+    }
+
+    /** 获取当前数据源（供 renderers 和 interaction 使用） */
+    getData(): KLineData[] {
+        return this.data
+    }
+
+    /** 获取内容总宽度（用于外部 scroll-content 撑开 scrollWidth） */
+    getContentWidth(): number {
+        const n = this.data?.length ?? 0
+        const plotWidth = this.opt.kGap + n * (this.opt.kWidth + this.opt.kGap)
+        const yAxisTotalWidth = this.opt.rightAxisWidth + (this.opt.priceLabelWidth || 60)
+        return plotWidth + yAxisTotalWidth
+    }
+
+    /** 容器尺寸变化时调用 */
+    resize() {
+        this.computeViewport()
+        this.layoutPanes()
+        this.scheduleDraw()
+    }
+
+    /** 请求下一帧重绘（RAF 合并） */
+    scheduleDraw() {
+        if (this.raf != null) cancelAnimationFrame(this.raf)
+        this.raf = requestAnimationFrame(() => {
+            this.raf = null
+            this.draw()
+        })
+    }
+
+
+
+    /** 销毁图表实例 */
     destroy() {
         if (this.raf != null) cancelAnimationFrame(this.raf)
         this.raf = null
@@ -356,6 +450,7 @@ export class Chart {
         this.onZoomChange = undefined
     }
 
+    /** 初始化所有 pane */
     private initPanes() {
         this.paneRenderers = this.opt.panes.map((spec, index) => {
             const pane = new Pane(spec.id)
@@ -380,8 +475,8 @@ export class Chart {
                 {
                     rightAxisWidth: this.opt.rightAxisWidth,
                     yPaddingPx: this.opt.yPaddingPx,
-                    priceLabelWidth: this.opt.priceLabelWidth, // 传递价格标签宽度配置
-                    isLast: index === this.opt.panes.length - 1, // 最后一个 pane 标记
+                    priceLabelWidth: this.opt.priceLabelWidth,
+                    isLast: index === this.opt.panes.length - 1,
                 }
             )
 
@@ -410,7 +505,7 @@ export class Chart {
         }
     }
 
-    /** 计算每个 pane 的布局（top/height） */
+    /** 计算每个 pane 的布局（top 和 height） */
     private layoutPanes() {
         const vp = this.viewport
         if (!vp) return
@@ -431,7 +526,12 @@ export class Chart {
             const h = i === n - 1 ? availableH - y : Math.round(availableH * (spec.ratio / totalRatio))
 
             pane.setLayout(y, h)
-            pane.setPadding(this.opt.yPaddingPx, this.opt.yPaddingPx)
+            // 1. 副图不设置 padding，主图使用配置的 yPaddingPx
+            if (pane.id === 'sub') {
+                pane.setPadding(0, 0)
+            } else {
+                pane.setPadding(this.opt.yPaddingPx, this.opt.yPaddingPx)
+            }
 
             renderer.resize(vp.plotWidth, h, vp.dpr)
             const dom = renderer.getDom()

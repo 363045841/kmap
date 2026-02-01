@@ -20,8 +20,9 @@ export const CandleRenderer: PaneRenderer = {
      * @param kGap K 线间隔
      * @param dpr 设备像素比
      * @param _paneWidth pane 宽度（未使用）
+     * @param kLinePositions K 线起始 x 坐标数组（由 Chart 统一计算）
      */
-    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth }) {
+    draw({ ctx, pane, data, range, scrollLeft, kWidth, kGap, dpr, paneWidth: _paneWidth, kLinePositions }) {
         if (!data.length) return
 
         const { kWidthPx } = getPhysicalKLineConfig(kWidth, kGap, dpr)
@@ -29,8 +30,8 @@ export const CandleRenderer: PaneRenderer = {
         ctx.save()
         ctx.translate(-scrollLeft, 0)
 
-        const unit = kWidth + kGap
-        const startX = kGap
+        const positions = kLinePositions || []
+        const realPos: number[] = []
 
         for (let i = range.start; i < range.end && i < data.length; i++) {
             const e = data[i]
@@ -44,8 +45,9 @@ export const CandleRenderer: PaneRenderer = {
             const rawRectY = Math.min(openY, closeY)
             const rawRectH = Math.max(Math.abs(openY - closeY), 1)
 
-            const leftLogical = startX + i * unit
-
+            // 使用 Chart 统一计算的 x 坐标
+            const leftLogical = positions[i - range.start]
+            if (!leftLogical) continue
             const aligned = createAlignedKLineFromPx(
                 Math.round(leftLogical * dpr),
                 rawRectY,
@@ -59,7 +61,7 @@ export const CandleRenderer: PaneRenderer = {
 
             ctx.fillStyle = color
             ctx.fillRect(aligned.bodyRect.x, aligned.bodyRect.y, aligned.bodyRect.width, aligned.bodyRect.height)
-
+            realPos[i - range.start] = aligned.bodyRect.x
             const wickWidth = aligned.wickRect.width
             const wickX = aligned.wickRect.x
             const bodyTop = aligned.bodyRect.y

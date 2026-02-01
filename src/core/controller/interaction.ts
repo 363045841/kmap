@@ -1,9 +1,8 @@
 import type { Chart } from '../chart'
 
 /**
- * 交互控制器：只依赖 Chart 公共 API，不依赖 Vue。
- * 先落地：拖拽滚动 / wheel 缩放。
- * hover/crosshair 后续按同样方式接入。
+ * 交互控制器，处理拖拽滚动、缩放、十字线 hover 等交互逻辑
+ * 只依赖 Chart 公共 API，不依赖 Vue
  */
 export class InteractionController {
     private chart: Chart
@@ -11,36 +10,44 @@ export class InteractionController {
     private dragStartX = 0
     private scrollStartX = 0
 
-    // ===== 新增：触摸会话标记，避免触摸触发的模拟 mouse 事件干扰 =====
+    /** 触摸会话标记，避免触摸触发的模拟 mouse 事件干扰 */
     private isTouchSession = false
 
-    // ===== Crosshair / Hover 状态（给渲染与 Vue tooltip 使用） =====
+    /** 十字线位置 */
     crosshairPos: { x: number; y: number } | null = null
+    /** 十字线当前指向的 K 线索引 */
     crosshairIndex: number | null = null
+    /** 鼠标悬停的 K 线索引（命中 candle 时有效） */
     hoveredIndex: number | null = null
+    /** 当前活跃的 pane ID */
     activePaneId: string | null = null
+    /** tooltip 位置 */
     tooltipPos: { x: number; y: number } = { x: 0, y: 0 }
+    /** tooltip 尺寸 */
     tooltipSize: { width: number; height: number } = { width: 220, height: 180 }
+
+    /** 当前帧的 K 线起始 x 坐标数组 */
+    private kLinePositions: number[] | null = null
+    /** 当前帧的可见 K 线索引范围 */
+    private visibleRange: { start: number; end: number } | null = null
 
     constructor(chart: Chart) {
         this.chart = chart
     }
 
     /**
-     * Pointer 事件：用于移动端/触屏设备。
-     * 设计目标：手指一接触屏幕（pointerdown）就立刻更新 crosshair。
+     * 处理 Pointer 按下事件（支持触屏设备）
+     * @param e PointerEvent
      */
     onPointerDown(e: PointerEvent) {
-        // 只处理主指针（手指/鼠标主键），避免多指触控时状态混乱
+        // 1. 只处理主指针，避免多指触控状态混乱
         if (e.isPrimary === false) return
 
-        // 标记触摸会话：触摸设备上 pointer 之后往往还会触发模拟的 mouse 事件
-        // 这里记录下来以便在 onMouseXxx 里忽略这些模拟事件
+        // 2. 标记触摸会话，用于在 mouse 事件中忽略模拟事件
         this.isTouchSession = e.pointerType === 'touch'
 
-        // 手指按下：立即更新十字线位置
+        // 3. 立即更新十字线位置
         this.isDragging = true
-        // 直接更新位置：避免先 clear 再 update 导致闪烁
         this.updateHoverFromPoint(e.clientX, e.clientY)
 
         const container = this.chart.getDom().container
@@ -48,17 +55,21 @@ export class InteractionController {
         this.scrollStartX = container.scrollLeft
 
         this.chart.scheduleDraw()
-        // 不在这里 preventDefault：让容器仍然可以滚动（横向滚动由拖拽逻辑控制）
     }
 
+    /**
+     * 处理 Pointer 移动事件
+     * @param e PointerEvent
+     */
     onPointerMove(e: PointerEvent) {
         if (e.isPrimary === false) return
         const container = this.chart.getDom().container
 
         if (this.isDragging) {
+            // 1. 拖拽时更新滚动位置
             const deltaX = this.dragStartX - e.clientX
             container.scrollLeft = this.scrollStartX + deltaX
-            // 拖拽时也更新十字线（可选：让 crosshair 跟随手指）
+            // 2. 拖拽时同步更新十字线
             this.updateHoverFromPoint(e.clientX, e.clientY)
             this.chart.scheduleDraw()
             return
@@ -68,17 +79,19 @@ export class InteractionController {
         this.chart.scheduleDraw()
     }
 
+    /**
+     * 处理 Pointer 抬起事件
+     * @param e PointerEvent
+     */
     onPointerUp(e: PointerEvent) {
         if (e.isPrimary === false) return
         this.isDragging = false
-
-        // 可选：如果希望抬起手指后十字线消失，可启用下面逻辑
-        // if (e.pointerType === 'touch') {
-        //     this.clearHover()
-        //     this.chart.scheduleDraw()
-        // }
     }
 
+    /**
+     * 处理 Pointer 离开事件
+     * @param e PointerEvent
+     */
     onPointerLeave(e: PointerEvent) {
         if (e.isPrimary === false) return
         this.isDragging = false
@@ -87,13 +100,17 @@ export class InteractionController {
         this.chart.scheduleDraw()
     }
 
+    /**
+     * 处理鼠标按下事件
+     * @param e MouseEvent
+     */
     onMouseDown(e: MouseEvent) {
-        // 触摸会话中忽略模拟的 mouse 事件
+        // 1. 触摸会话中忽略模拟的 mouse 事件
         if (this.isTouchSession) return
         if (e.button !== 0) return
+
         const container = this.chart.getDom().container
         this.isDragging = true
-        // 鼠标按下时也更新 hover（保持与 pointer 行为一致）
         this.dragStartX = e.clientX
         this.scrollStartX = container.scrollLeft
         this.updateHoverFromPoint(e.clientX, e.clientY)
@@ -101,10 +118,16 @@ export class InteractionController {
         e.preventDefault()
     }
 
+    /**
+     * 处理鼠标移动事件
+     * @param e MouseEvent
+     */
     onMouseMove(e: MouseEvent) {
         if (this.isTouchSession) return
         const container = this.chart.getDom().container
+
         if (this.isDragging) {
+            // 1. 拖拽时更新滚动位置
             const deltaX = this.dragStartX - e.clientX
             container.scrollLeft = this.scrollStartX + deltaX
             return
@@ -114,11 +137,13 @@ export class InteractionController {
         this.chart.scheduleDraw()
     }
 
+    /** 处理鼠标抬起事件 */
     onMouseUp() {
         if (this.isTouchSession) return
         this.isDragging = false
     }
 
+    /** 处理鼠标离开事件 */
     onMouseLeave() {
         if (this.isTouchSession) return
         this.isDragging = false
@@ -126,11 +151,19 @@ export class InteractionController {
         this.chart.scheduleDraw()
     }
 
+    /** 处理滚动事件 */
     onScroll() {
+        // 1. 清空 kLinePositions 和 visibleRange，避免使用过期数据
+        this.kLinePositions = null
+        this.visibleRange = null
         this.clearHover()
         this.chart.scheduleDraw()
     }
 
+    /**
+     * 处理滚轮缩放事件
+     * @param e WheelEvent
+     */
     onWheel(e: WheelEvent) {
         const container = this.chart.getDom().container
         const rect = container.getBoundingClientRect()
@@ -141,8 +174,22 @@ export class InteractionController {
         this.chart.zoomAt(mouseX, scrollLeft, e.deltaY)
     }
 
+    /**
+     * 设置 tooltip 尺寸
+     * @param size 宽高对象
+     */
     setTooltipSize(size: { width: number; height: number }) {
         this.tooltipSize = size
+    }
+
+    /**
+     * 设置当前帧的 K 线起始 x 坐标数组和可见范围
+     * @param positions K 线起始 x 坐标数组
+     * @param visibleRange 可见 K 线索引范围
+     */
+    setKLinePositions(positions: number[] | null, visibleRange: { start: number; end: number } | null) {
+        this.kLinePositions = positions
+        this.visibleRange = visibleRange
     }
 
     /** 检查是否正在拖拽 */
@@ -150,6 +197,7 @@ export class InteractionController {
         return this.isDragging
     }
 
+    /** 清除 hover 状态 */
     private clearHover() {
         this.crosshairPos = null
         this.crosshairIndex = null
@@ -157,10 +205,19 @@ export class InteractionController {
         this.activePaneId = null
     }
 
+    /**
+     * 从鼠标事件更新 hover 状态
+     * @param e MouseEvent
+     */
     private updateHover(e: MouseEvent) {
         this.updateHoverFromPoint(e.clientX, e.clientY)
     }
 
+    /**
+     * 从屏幕坐标更新 hover 状态
+     * @param clientX 屏幕 x 坐标
+     * @param clientY 屏幕 y 坐标
+     */
     private updateHoverFromPoint(clientX: number, clientY: number) {
         const container = this.chart.getDom().container
         const rect = container.getBoundingClientRect()
@@ -170,18 +227,26 @@ export class InteractionController {
         const opt = this.chart.getOption()
         const viewWidth = Math.max(1, Math.round(rect.width))
         const viewHeight = Math.max(1, Math.round(rect.height))
-        const plotWidth = viewWidth - opt.rightAxisWidth
+        const plotWidth = viewWidth - opt.rightAxisWidth - (opt.priceLabelWidth || 60)
         const plotHeight = viewHeight - opt.bottomAxisHeight
 
+        // 1. 检查鼠标是否在绘图区域内
         if (mouseX < 0 || mouseY < 0 || mouseX > plotWidth || mouseY > plotHeight) {
             this.clearHover()
             return
         }
 
         const scrollLeft = container.scrollLeft
+        const dpr = window.devicePixelRatio || 1
+
+        // 2. 使用原始逻辑像素参数（与 CandleRenderer / calcKLinePositions 一致）
         const unit = opt.kWidth + opt.kGap
+        const startX = opt.kGap
+
+        // 3. 在逻辑像素空间计算 idx
         const worldX = scrollLeft + mouseX
-        const offset = worldX - opt.kGap
+        const offset = worldX - startX
+
         if (offset < 0) {
             this.clearHover()
             return
@@ -190,26 +255,34 @@ export class InteractionController {
         const data = this.chart.getData()
         const idx = Math.floor(offset / unit)
 
-        // pane 选择：按鼠标 y 落在哪个 pane（先基于 layout.top/height）
+        // 4. 确定鼠标落在哪个 pane
         const paneRenderers = this.chart.getPaneRenderers()
         const renderer = paneRenderers.find((r) => {
             const pane = r.getPane()
             return mouseY >= pane.top && mouseY <= pane.top + pane.height
         })
         const pane = renderer?.getPane() || null
-        if (!pane) {
-            // 鼠标在 plot 区域但落在 paneGap 上：仍显示 crosshair（不属于任何 pane），但不显示 tooltip/label
-            this.activePaneId = null
-        } else {
-            this.activePaneId = pane.id
-        }
+        this.activePaneId = pane?.id || null
 
-        // ===== 十字线：只要在 plot 区域内就显示（不要求命中 K 线） =====
-        // X 方向仍吸附到最近 K（如果 idx 有效），否则保持 mouseX。
+        // 5. 计算十字线位置
         if (idx >= 0 && idx < (data?.length ?? 0)) {
             this.crosshairIndex = idx
-            const centerWorldX = opt.kGap + idx * unit + opt.kWidth / 2
-            const snappedX = centerWorldX - scrollLeft
+
+            const { kWidthPx } = this.chart.getKLinePhysicalConfig()
+
+            let snappedX: number
+            if (this.kLinePositions && this.visibleRange &&
+                idx >= this.visibleRange.start && idx < this.visibleRange.end) {
+                // 5.1 使用预计算的坐标（与渲染完全一致）
+                const kLineStartX = this.kLinePositions[idx - this.visibleRange.start]!
+                snappedX = kLineStartX + (kWidthPx - 1) / 2 / dpr - scrollLeft
+            } else {
+                // 5.2 超出可见范围，使用原始计算 + 像素对齐
+                const leftLogical = startX + idx * unit
+                const alignedLeft = Math.round(leftLogical * dpr) / dpr
+                snappedX = alignedLeft + (kWidthPx - 1) / 2 / dpr - scrollLeft
+            }
+
             this.crosshairPos = {
                 x: Math.min(Math.max(snappedX, 0), plotWidth),
                 y: Math.min(Math.max(mouseY, 0), plotHeight),
@@ -222,8 +295,7 @@ export class InteractionController {
             }
         }
 
-        // ===== Tooltip 命中判定：仍要求命中 candle body/wick 才显示 tooltip =====
-        // 只在主图上显示 tooltip，副图不显示
+        // 6. Tooltip 命中判定
         const k = typeof this.crosshairIndex === 'number' ? data[this.crosshairIndex] : undefined
         if (!k || !pane || pane.id !== 'main') {
             this.hoveredIndex = null
@@ -238,21 +310,25 @@ export class InteractionController {
         const bodyTop = Math.min(openY, closeY)
         const bodyBottom = Math.max(openY, closeY)
 
-        const inUnitX = offset - (this.crosshairIndex as number) * unit
-        const HIT_WICK_HALF = 3
-        const cx = opt.kWidth / 2
+        // 6.1 使用逻辑像素计算在当前 K 线单元内的相对 X 位置
+        const kLineStartX = startX + idx * unit
+        const inUnitX = worldX - kLineStartX
+        const kWidthLogical = opt.kWidth
+        const cxLogical = kWidthLogical / 2
 
-        // 扩大 hitBody 的 Y 方向判定范围：当实体线很小时，使用最小判定高度
-        const MIN_BODY_HIT_HEIGHT = 8 // 最小判定高度（逻辑像素）
+        // 6.2 扩大 hitBody 的 Y 方向判定范围
+        const MIN_BODY_HIT_HEIGHT = 8
         const bodyHeight = Math.abs(bodyBottom - bodyTop)
         const effectiveBodyTop = bodyHeight < MIN_BODY_HIT_HEIGHT ? (bodyTop + bodyBottom) / 2 - MIN_BODY_HIT_HEIGHT / 2 : bodyTop
         const effectiveBodyBottom = bodyHeight < MIN_BODY_HIT_HEIGHT ? (bodyTop + bodyBottom) / 2 + MIN_BODY_HIT_HEIGHT / 2 : bodyBottom
 
-        // 扩大 hitWick 的 X 方向判定范围：让更容易命中 wick
-        const HIT_WICK_HALF_EXTENDED = 6 // 扩大后的 wick 判定半宽
+        // 6.3 扩大 hitWick 的 X 方向判定范围
+        const HIT_WICK_HALF_EXTENDED = 3
 
-        const hitBody = localY >= effectiveBodyTop && localY <= effectiveBodyBottom && inUnitX >= 0 && inUnitX <= opt.kWidth
-        const hitWick = Math.abs(inUnitX - cx) <= HIT_WICK_HALF_EXTENDED && localY >= highY && localY <= lowY
+        const hitBody = localY >= effectiveBodyTop && localY <= effectiveBodyBottom &&
+            inUnitX >= 0 && inUnitX <= kWidthLogical
+        const hitWick = Math.abs(inUnitX - cxLogical) <= HIT_WICK_HALF_EXTENDED &&
+            localY >= highY && localY <= lowY
 
         if (!hitBody && !hitWick) {
             this.hoveredIndex = null
@@ -261,7 +337,7 @@ export class InteractionController {
 
         this.hoveredIndex = this.crosshairIndex
 
-        // tooltip 防溢出定位（复用旧逻辑）
+        // 6.4 tooltip 防溢出定位
         const padding = 12
         const preferGap = 14
         const tooltipW = this.tooltipSize.width

@@ -20,6 +20,7 @@ export interface PaneRenderer {
      * @param kGap K 线间隔
      * @param dpr 设备像素比
      * @param paneWidth pane 宽度
+     * @param kLinePositions 可选，K 线起始 x 坐标数组（由 Chart 统一计算）
      */
     draw(args: {
         ctx: CanvasRenderingContext2D
@@ -31,6 +32,7 @@ export interface PaneRenderer {
         kGap: number
         dpr: number
         paneWidth: number
+        kLinePositions: number[]
     }): void
 }
 

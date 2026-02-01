@@ -89,8 +89,9 @@ export class PaneRenderer {
         crosshairPos?: { x: number; y: number } | null
         crosshairIndex?: number | null
         title?: string
+        kLinePositions: number[]
     }) {
-        const { data, range, scrollLeft, kWidth, kGap, dpr, crosshairPos, crosshairIndex, title } = args
+        const { data, range, scrollLeft, kWidth, kGap, dpr, crosshairPos, crosshairIndex, title, kLinePositions } = args
 
         // 1. 获取最新价（最后一根 K 线的收盘价）
         const lastKLine = data.length > 0 ? data[data.length - 1] : undefined
@@ -133,6 +134,7 @@ export class PaneRenderer {
                 kGap,
                 dpr,
                 paneWidth,
+                kLinePositions,
             })
         }
         plotCtx.restore()
@@ -153,6 +155,7 @@ export class PaneRenderer {
             kGap,
             dpr,
             paneWidth,
+            kLinePositions,
         })
 
         // 7. 绘制十字线价格标签
