@@ -51,7 +51,6 @@ import { LastPriceLineRenderer } from '@/core/renderers/lastPrice'
 import { createMARenderer } from '@/core/renderers/ma'
 import { ExtremaMarkersRenderer } from '@/core/renderers/extremaMarkers'
 import { subVolumeRenderer } from '@/core/renderers/subVolume'
-import { tagLog } from '@/utils/logger'
 
 type MAFlags = {
   ma5?: boolean
@@ -312,10 +311,10 @@ onMounted(() => {
   // 注册 Pane 渲染器
   chart.setPaneRenderers('main', [
     GridLinesRenderer,
-    LastPriceLineRenderer,
-    CandleRenderer,
     ExtremaMarkersRenderer,
     createMARenderer(props.showMA),
+    CandleRenderer,
+    LastPriceLineRenderer,
   ])
   chart.setPaneRenderers('sub', [GridLinesRenderer, subVolumeRenderer])
 
