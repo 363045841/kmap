@@ -58,8 +58,6 @@ src/
 │   ├── kLineDraw/       # K 线绘制工具
 │   ├── kline/           # K 线数据处理
 │   └── mock/            # 模拟数据生成
-├── stores/              # 状态管理 (Pinia)
-└── assets/              # 静态资源
 ```
 
 ### BaoStock（推荐）
