@@ -79,6 +79,8 @@ function createMockSharedWebGLSurface() {
     clearRegion: vi.fn(),
     compositeRegionTo: vi.fn(),
     getPhysicalRegion: vi.fn(() => null),
+    beginFrame: vi.fn(() => true),
+    endFrame: vi.fn(),
     destroy: vi.fn(),
   }
 }
@@ -195,9 +197,21 @@ describe('createWebGLRenderer', () => {
       expect(mocks.mockResize).toHaveBeenCalledWith(800, 600, 2)
     })
 
-    it('endFrame does not throw', () => {
-      const { renderer } = makeRenderer()
+    it('opens one shared frame for multiple pane regions', () => {
+      const { renderer, glSurface } = makeRenderer()
+      renderer.beginFrame({ x: 0, y: 0, width: 800, height: 400, dpr: 1 })
+      renderer.beginFrame({ x: 0, y: 400, width: 800, height: 200, dpr: 1 })
+      renderer.endFrame()
+
+      expect(glSurface.beginFrame).toHaveBeenCalledOnce()
+      expect(glSurface.endFrame).toHaveBeenCalledOnce()
+    })
+
+    it('ends the shared frame once', () => {
+      const { renderer, glSurface } = makeRenderer()
+      renderer.beginFrame({ x: 0, y: 0, width: 800, height: 600, dpr: 1 })
       expect(() => renderer.endFrame()).not.toThrow()
+      expect(glSurface.endFrame).toHaveBeenCalledOnce()
     })
   })
 

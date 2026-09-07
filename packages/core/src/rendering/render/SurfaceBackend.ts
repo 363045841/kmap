@@ -51,16 +51,14 @@ export interface SurfaceBackend {
   resize(widthLogical: number, heightLogical: number, dpr: number): void
 
   /**
-   * Bind a region for subsequent draw commands.
+   * 在活动帧内绑定一个区域，供后续 draw commands 使用。
    * Activates scissor + viewport sized to `region`. Returns false if the
-   * region is empty or the backend is unavailable.
+   * region is empty, backend is unavailable, or no frame is active.
    */
   bindRegion(region: SurfaceRegion): boolean
 
   /**
-   * Clear the most recently bound region to transparent black.
-   * Must be called after `bindRegion`. Backends MAY no-op if no region
-   * is currently bound.
+   * 清空指定区域到透明黑色。实现可同时清空离屏 target 和可见 surface。
    */
   clearRegion(region: SurfaceRegion): void
 
