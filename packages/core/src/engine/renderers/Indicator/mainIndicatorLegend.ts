@@ -30,10 +30,20 @@ function measureTextWidth(ctx: CanvasRenderingContext2D, text: string): number {
   return width
 }
 
-/** 渲染器配置 */
+/** Canvas 主图图例的公开配置。 */
+export interface CanvasLegendOptions {
+  /** 是否绘制 Canvas 图例，默认 true。 */
+  visible?: boolean
+  /** 允许显示的主图指标 ID；未设置时显示全部。 */
+  visibleIndicatorIds?: ReadonlyArray<string>
+}
+
+/** 渲染器内部配置。 */
 interface MainIndicatorLegendConfig {
   yPaddingPx: number
-  /** canvas 默认绘制；external 仅发布上下文 */
+  /** 是否绘制 Canvas 图例。 */
+  visible: boolean
+  /** 兼容外部 DOM 图例模式。 */
   renderMode: LegendRenderMode
   /** 当前数据视图允许在图例显示的主图指标。 */
   visibleIndicatorIds: ReadonlyArray<string> | null
@@ -56,6 +66,7 @@ export function createMainIndicatorLegendRendererPlugin(
 ): RendererPluginWithHost {
   const config: MainIndicatorLegendConfig = {
     yPaddingPx: options.yPaddingPx,
+    visible: true,
     renderMode: 'canvas',
     visibleIndicatorIds: null,
   }
@@ -91,7 +102,7 @@ export function createMainIndicatorLegendRendererPlugin(
       })
       onContext?.(legend)
 
-      if (config.renderMode === 'external') return
+      if (!config.visible || config.renderMode === 'external') return
       if (!legend || !context.overlayCtx) return
 
       paintLegendOnCanvas(context.overlayCtx, legend)
@@ -100,6 +111,7 @@ export function createMainIndicatorLegendRendererPlugin(
     getConfig() {
       return {
         yPaddingPx: config.yPaddingPx,
+        visible: config.visible,
         renderMode: config.renderMode,
         visibleIndicatorIds: config.visibleIndicatorIds,
       }
@@ -109,14 +121,21 @@ export function createMainIndicatorLegendRendererPlugin(
       if (typeof newConfig.yPaddingPx === 'number') {
         config.yPaddingPx = newConfig.yPaddingPx
       }
+      if (typeof newConfig.visible === 'boolean') {
+        config.visible = newConfig.visible
+      }
       if (newConfig.renderMode === 'canvas' || newConfig.renderMode === 'external') {
         config.renderMode = newConfig.renderMode
       }
-      if (Array.isArray(newConfig.visibleIndicatorIds)) {
-        config.visibleIndicatorIds = Object.freeze(
-          newConfig.visibleIndicatorIds.filter((id): id is string => typeof id === 'string'),
-        )
-        visibleIndicatorIdSet = new Set(config.visibleIndicatorIds)
+      if ('visibleIndicatorIds' in newConfig) {
+        config.visibleIndicatorIds = Array.isArray(newConfig.visibleIndicatorIds)
+          ? Object.freeze(
+              newConfig.visibleIndicatorIds.filter((id): id is string => typeof id === 'string'),
+            )
+          : null
+        visibleIndicatorIdSet = config.visibleIndicatorIds
+          ? new Set(config.visibleIndicatorIds)
+          : null
       }
     },
   }

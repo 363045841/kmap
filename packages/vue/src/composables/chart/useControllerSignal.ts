@@ -36,3 +36,39 @@ export function useControllerSignal<T>(
   )
   return computed(() => snapshot.value)
 }
+
+/**
+ * 订阅 Controller 信号的一个字段，仅投影值变化时才通知 Vue。
+ * 高频快照可保持 Core 内部更新，避免对象引用变化导致 Vue 无效刷新。
+ */
+export function useControllerSignalValue<T, TValue>(
+  controllerRef: Ref<ChartController | null>,
+  select: (controller: ChartController) => ReadonlyControllerSignal<T> | undefined,
+  project: (value: T) => TValue,
+  fallback: () => TValue,
+): ComputedRef<TValue> {
+  const snapshot = shallowRef<TValue>(fallback())
+  watch(
+    controllerRef,
+    (controller, _previous, onCleanup) => {
+      if (!controller) {
+        snapshot.value = fallback()
+        return
+      }
+      const signal = select(controller)
+      if (!signal) {
+        snapshot.value = fallback()
+        return
+      }
+      const sync = () => {
+        const next = project(signal.peek())
+        if (Object.is(snapshot.value, next)) return
+        snapshot.value = next
+      }
+      sync()
+      onCleanup(signal.subscribe(sync))
+    },
+    { immediate: true },
+  )
+  return computed(() => snapshot.value)
+}

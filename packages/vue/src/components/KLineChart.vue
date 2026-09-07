@@ -31,16 +31,7 @@
         @update-source-endpoint="setAggregationSourceEndpoint"
         @back="onBackFromTimeShare"
       />
-      <div
-        class="chart-stage"
-        :class="{
-          'is-dragging': isDragging,
-          'is-resizing-pane': isResizingPane,
-          'is-hovering-pane-separator': isHoveringPaneSeparator,
-          'is-hovering-right-axis': isHoveringRightAxis,
-          'is-hovering-kline': hoveredIndex !== null,
-        }"
-      >
+      <div ref="chartStageRef" class="chart-stage">
         <LeftToolbar
           ref="toolbarRef"
           :is-fullscreen="effectiveIsFullscreen"
@@ -69,7 +60,7 @@
               v-for="line in paneSeparatorLines"
               :key="line.id"
               class="pane-separator-line"
-              :class="{ 'is-active': hoveredPaneBoundaryId === line.id }"
+              :data-pane-id="line.id"
               :style="{ top: `${line.top}px` }"
             ></div>
           </div>
@@ -191,74 +182,51 @@
             </div>
           </div>
           <Teleport v-if="tooltipLayerRef" :to="tooltipLayerRef">
-            <template v-if="showKLineTooltip">
+            <template v-if="hasKLineTooltipSlot">
               <div
-                v-if="slots['kline-tooltip']"
+                v-if="showExternalKLineTooltip"
                 class="kline-tooltip-host"
                 :class="{ 'is-draggable': isTooltipDraggable }"
-                :style="klineTooltipStyle"
+                :style="externalKLineTooltipStyle"
                 @pointerdown="onTooltipPointerDown"
                 @dblclick="onTooltipDblClick"
               >
                 <slot
                   name="kline-tooltip"
-                  :hover-data="hoveredKLine!"
-                  :hovered-index="hoveredIndex"
+                  :hover-data="externalHoveredKLine!"
+                  :hovered-index="externalInteractionState.hoveredIndex"
                   :data="chartData"
                   :up-color="tooltipColors.upColor"
                   :down-color="tooltipColors.downColor"
                 />
               </div>
-              <slot
-                v-else
-                name="kline-tooltip"
-                :hover-data="hoveredKLine!"
-                :hovered-index="hoveredIndex"
-                :data="chartData"
-                :up-color="tooltipColors.upColor"
-                :down-color="tooltipColors.downColor"
-              >
-                <div
-                  class="tooltip-anchor kline-tooltip-anchor"
-                  :class="{ 'use-anchor': useAnchorPositioning }"
-                  :style="klineTooltipAnchorStyle"
-                ></div>
-                <div
-                  ref="tooltipContentRef"
-                  class="kline-tooltip"
-                  :class="{
-                    'use-anchor': useAnchorPositioning,
-                    'is-draggable': isTooltipDraggable,
-                  }"
-                  :style="
-                    useAnchorPositioning
-                      ? undefined
-                      : { left: teleportedTooltipPos.x + 'px', top: teleportedTooltipPos.y + 'px' }
-                  "
-                  @pointerdown="onTooltipPointerDown"
-                  @dblclick="onTooltipDblClick"
-                ></div>
-              </slot>
             </template>
+            <div
+              v-else
+              ref="tooltipContentRef"
+              class="kline-tooltip"
+              :class="{ 'is-draggable': isTooltipDraggable }"
+              @pointerdown="onTooltipPointerDown"
+              @dblclick="onTooltipDblClick"
+            ></div>
             <template v-if="hoveredMarker || hoveredCustomMarker">
               <slot
+                v-if="hasMarkerTooltipSlot"
                 name="marker-tooltip"
                 :marker="hoveredMarker || hoveredCustomMarker"
-                :tooltip-style="markerTooltipStyle"
-              >
+                :tooltip-style="externalMarkerTooltipStyle"
+              />
+              <template v-else>
                 <div
+                  ref="markerTooltipAnchorRef"
                   class="tooltip-anchor marker-tooltip-anchor"
-                  :class="{ 'use-anchor': useAnchorPositioning }"
-                  :style="markerTooltipAnchorStyle"
                 ></div>
                 <MarkerTooltip
                   :marker="hoveredMarker || hoveredCustomMarker"
-                  :pos="teleportedMarkerTooltipPos"
-                  :use-anchor="useAnchorPositioning"
-                  :anchor-placement="markerTooltipAnchorPlacement"
+                  :pos="markerTooltipInitialPosition"
                   :set-el="setMarkerTooltipEl"
                 />
-              </slot>
+              </template>
             </template>
           </Teleport>
           <div
@@ -308,7 +276,10 @@
     resolveSettings,
     type ChartSettings,
   } from '@363045841yyt/klinechart-core/config'
-  import type { RendererBackendRuntime } from '@363045841yyt/klinechart-core/controllers'
+  import type {
+    CanvasLegendOptions,
+    RendererBackendRuntime,
+  } from '@363045841yyt/klinechart-core/controllers'
   import {
     createChartController,
     marketDataProviderRegistry,
@@ -326,7 +297,10 @@
     searchInstruments,
     type InstrumentDescriptor,
   } from '@363045841yyt/klinechart-core/market-data'
-  import type { CustomMarkerEntity } from '@363045841yyt/klinechart-core/engine/marker/registry'
+  import type {
+    CustomMarkerEntity,
+    MarkerEntity,
+  } from '@363045841yyt/klinechart-core/engine/marker/registry'
   import {
     ref,
     computed,
@@ -345,6 +319,9 @@
   import { formatTimestamp } from '@363045841yyt/klinechart-core'
 
   const slots = useSlots()
+  // 外部 slot 需要 Vue 响应式 props；默认 tooltip 走直接 DOM 更新，避免高频 VNode patch。
+  const hasKLineTooltipSlot = ref(Boolean(slots['kline-tooltip']))
+  const hasMarkerTooltipSlot = ref(Boolean(slots['marker-tooltip']))
   /** Provider 与遗留 Fetcher 的展示元数据；已迁移源不再注册旧 Fetcher。 */
   const aggregationSources: ReadonlyArray<AggregationSourceDefinition> = [
     ...marketDataProviderRegistry.getAll().map((provider) => ({
@@ -431,6 +408,9 @@
        * 未传时才从 localStorage 恢复用户偏好。
        */
       settings?: Partial<ChartSettings>
+
+      /** Canvas 主图图例配置；默认由 Core 绘制，不进入 Vue 更新路径。 */
+      legend?: CanvasLegendOptions
 
       /** 用户自定义数据源（传入后 bypass fetcher，使用此数据） */
       customData?: CustomDataSource
@@ -739,6 +719,7 @@
   const containerRef = ref<HTMLDivElement | null>(null)
   const canvasLayerRef = ref<HTMLDivElement | null>(null)
   const chartMainRef = ref<HTMLDivElement | null>(null)
+  const chartStageRef = ref<HTMLDivElement | null>(null)
   const chartWrapperRef = ref<HTMLDivElement | null>(null)
   const tooltipLayerRef = ref<HTMLDivElement | null>(null)
   const tooltipContentRef = ref<HTMLDivElement | null>(null)
@@ -833,7 +814,6 @@
   const chartState = useChartState(controller)
   const {
     symbolStatus,
-    viewport,
     data,
     zoomLevel,
     paneRatios,
@@ -867,11 +847,14 @@
     handleReorderSubIndicators,
   } = useIndicatorManager(controller, paneRatios)
 
+  // 仅在画布几何变化时刷新 Pane Header；横向滚动改变 visible range 不应触发 Vue 渲染。
+  const paneHeaderLayoutEpoch = ref(0)
+
   /** 读取 Core 的真实 Pane 几何，确保 Header 与最小高度、取整后的布局一致。 */
   const paneHeaderItems = computed(() => {
-    // Pane 重排或 viewport 尺寸变化后，Canvas 会同步更新 DOM 尺寸与位置。
+    // Pane 重排或画布尺寸变化后，Canvas 会同步更新 DOM 尺寸与位置。
     void paneLayout.value
-    void viewport.value
+    void paneHeaderLayoutEpoch.value
     const canvasLayer = canvasLayerRef.value
     if (!canvasLayer) return []
 
@@ -978,7 +961,6 @@
     isRangeSelectMode,
     containerRef,
     data,
-    viewport,
     batchSymbols,
   })
 
@@ -1150,6 +1132,7 @@
     const ctrl = controller.value
     if (!ctrl) return
     _unsubTooltip = ctrl.interactionState.subscribe(() => {
+      if (hasKLineTooltipSlot.value) return
       const el = tooltipContentRef.value
       if (!el) return
       // 订阅整包 snapshot；内容更新仅依赖 hoveredIndex，索引未变时只动 display
@@ -1158,11 +1141,12 @@
       const data = ctrl.getData()
       const kline =
         typeof idx === 'number' && data && idx >= 0 && idx < data.length ? data[idx] : undefined
-      if (!kline || !data) {
+      if (!kline || !data || ctrl.chartMode.peek() === 'comparison' || isMobile) {
         el.style.display = 'none'
         return
       }
       el.style.display = ''
+      positionDefaultKLineTooltip()
       if (idx !== _prevTooltipIdx) {
         _prevTooltipIdx = idx
         if (!_tooltipSlots || _tooltipSlots.container !== el) {
@@ -1201,7 +1185,13 @@
   }
 
   function setMarkerTooltipEl(el: HTMLDivElement | null) {
-    if (!el || _measuredTooltips.has(el)) return
+    if (!el) {
+      markerTooltipEl = null
+      return
+    }
+    if (_measuredTooltips.has(el)) return
+    markerTooltipEl = el
+    positionDefaultMarkerTooltip()
     _measuredTooltips.add(el)
     if (!_markerTooltipRO) {
       _markerTooltipRO = new ResizeObserver((entries) => {
@@ -1220,25 +1210,10 @@
     _markerTooltipRO.observe(el)
   }
 
-  // ── Marker Tooltip & Container Rect Cache ──
-  const mousePos = ref({ x: 0, y: 0 })
-  const useAnchorPositioning = ref(false)
-  const tooltipDragPos = ref<{ x: number; y: number } | null>(null)
-  let _tooltipDragOffset = { x: 0, y: 0 }
-
-  let _cachedContainerRect: DOMRect | null = null
-  function invalidateContainerRectCache(): void {
-    _cachedContainerRect = null
-  }
-  function getContainerRect(container: HTMLDivElement): DOMRect {
-    if (!_cachedContainerRect) {
-      _cachedContainerRect = container.getBoundingClientRect()
-    }
-    return _cachedContainerRect
-  }
-
-  // ── Interaction State Bridge ──
-  const interactionState = shallowRef<InteractionSnapshot>({
+  // ── 高频交互 Overlay ──
+  // 鼠标坐标和帧快照只服务于 DOM overlay，不能写入 Vue ref，否则会在事件和 RAF 后各排一次 flushJobs。
+  let mousePos = { x: 0, y: 0 }
+  let latestInteractionState: InteractionSnapshot = {
     crosshairPos: null,
     crosshairIndex: null,
     crosshairPrice: null,
@@ -1253,7 +1228,77 @@
     isHoveringPaneBoundary: false,
     hoveredPaneBoundaryId: null,
     isHoveringRightAxis: false,
+  }
+  const externalInteractionState = shallowRef<InteractionSnapshot>(latestInteractionState)
+  const hoveredMarker = shallowRef<MarkerEntity | null>(null)
+  const hoveredCustomMarker = shallowRef<CustomMarkerEntity | null>(null)
+  const tooltipDragPos = ref<{ x: number; y: number } | null>(null)
+  const markerTooltipInitialPosition = { x: 0, y: 0 }
+  const externalMarkerTooltipStyle = shallowRef({
+    left: '0px',
+    top: '0px',
+    position: 'absolute' as const,
+    pointerEvents: 'none' as const,
+    zIndex: 10,
   })
+  let markerTooltipEl: HTMLDivElement | null = null
+  const markerTooltipAnchorRef = ref<HTMLDivElement | null>(null)
+  let _tooltipDragOffset = { x: 0, y: 0 }
+
+  let _cachedContainerRect: DOMRect | null = null
+  function invalidateContainerRectCache(): void {
+    _cachedContainerRect = null
+  }
+  function getContainerRect(container: HTMLDivElement): DOMRect {
+    if (!_cachedContainerRect) {
+      _cachedContainerRect = container.getBoundingClientRect()
+    }
+    return _cachedContainerRect
+  }
+
+  /** 返回 tooltip layer 相对 chart container 的固定偏移。 */
+  function getTooltipLayerOffset(): { x: number; y: number } {
+    const container = containerRef.value
+    const chartMain = chartMainRef.value
+    if (!container || !chartMain) return { x: 0, y: 0 }
+    return { x: container.offsetLeft, y: container.offsetTop }
+  }
+
+  /** 以直接 DOM 写入更新默认 K 线 tooltip 的位置。 */
+  function positionDefaultKLineTooltip(): void {
+    if (hasKLineTooltipSlot.value) return
+    const el = tooltipContentRef.value
+    if (!el) return
+    const position = tooltipDragPos.value ?? latestInteractionState.tooltipPos
+    const offset = getTooltipLayerOffset()
+    el.style.left = `${position.x + offset.x}px`
+    el.style.top = `${position.y + offset.y}px`
+  }
+
+  /** 以直接 DOM 写入更新默认 marker tooltip 的位置。 */
+  function positionDefaultMarkerTooltip(): void {
+    const offset = getTooltipLayerOffset()
+    const left = mousePos.x + offset.x + 12
+    const top = mousePos.y + offset.y + 12
+    if (hasMarkerTooltipSlot.value) {
+      externalMarkerTooltipStyle.value = {
+        left: `${left}px`,
+        top: `${top}px`,
+        position: 'absolute',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }
+      return
+    }
+    if (markerTooltipAnchorRef.value) {
+      markerTooltipAnchorRef.value.style.left = `${mousePos.x + offset.x}px`
+      markerTooltipAnchorRef.value.style.top = `${mousePos.y + offset.y}px`
+    }
+    if (markerTooltipEl) {
+      markerTooltipEl.style.left = `${left}px`
+      markerTooltipEl.style.top = `${top}px`
+    }
+  }
 
   /** 主图图例模板上下文（#legend slot 消费） */
   const legendTemplateContext = shallowRef<LegendTemplateContext | null>(null)
@@ -1263,6 +1308,8 @@
 
   onBeforeUpdate(() => {
     hasLegendSlot.value = !!slots.legend
+    hasKLineTooltipSlot.value = !!slots['kline-tooltip']
+    hasMarkerTooltipSlot.value = !!slots['marker-tooltip']
   })
 
   const legendOverlayStyle = computed(() => {
@@ -1277,7 +1324,8 @@
   function applyLegendRenderMode(ctrl: ChartController | null, external: boolean): void {
     if (!ctrl) return
     ctrl.updateRendererConfig('mainIndicatorLegend', {
-      renderMode: external ? 'external' : 'canvas',
+      visible: !external && props.legend?.visible !== false,
+      visibleIndicatorIds: props.legend?.visibleIndicatorIds,
     })
   }
 
@@ -1306,38 +1354,17 @@
     { immediate: false },
   )
 
+  watch(
+    () => props.legend,
+    () => applyLegendRenderMode(controller.value, hasLegendSlot.value),
+    { deep: true },
+  )
+
   const paneSeparatorLines = ref<Array<{ id: string; top: number }>>([])
   const markerTooltipSize = ref({ width: 220, height: 120 })
-  const tooltipLayerOffset = computed(() => {
-    const container = containerRef.value
-    const chartMain = chartMainRef.value
-    if (!container || !chartMain) return { x: 0, y: 0 }
-    return {
-      x: container.offsetLeft,
-      y: container.offsetTop,
-    }
-  })
-
-  const hoveredMarker = computed(() => interactionState.value.hoveredMarkerData)
-  const hoveredCustomMarker = computed(() => interactionState.value.hoveredCustomMarker)
-  const isDragging = computed(() => interactionState.value.isDragging)
-  const isResizingPane = computed(() => interactionState.value.isResizingPaneBoundary)
-  const isHoveringPaneSeparator = computed(() => interactionState.value.isHoveringPaneBoundary)
-  const hoveredPaneBoundaryId = computed(() => interactionState.value.hoveredPaneBoundaryId)
-  const isHoveringRightAxis = computed(() => interactionState.value.isHoveringRightAxis)
   const isMobile = window.matchMedia('(pointer: coarse)').matches
-  const crosshairIdx = computed(() => interactionState.value.crosshairIndex)
-
-  // ── Derived Computed (Cursor, Hovered, Tooltip) ──
-  const containerCursor = computed(() => {
-    if (isDragging.value) return 'grabbing'
-    if (isResizingPane.value || isHoveringPaneSeparator.value) return 'ns-resize'
-    if (hoveredIndex.value !== null) return 'pointer'
-    return 'crosshair'
-  })
-
-  const hoveredKLine = computed(() => {
-    const idx = interactionState.value.hoveredIndex
+  const externalHoveredKLine = computed(() => {
+    const idx = externalInteractionState.value.hoveredIndex
     if (typeof idx !== 'number') return null
     void data.value
     const items = data.value
@@ -1346,73 +1373,25 @@
     }
     return null
   })
-  // 对比视图使用左上角百分比图例，不展示单一主品种的 K 线详情 Tooltip。
-  const showKLineTooltip = computed(
-    () => chartMode.value !== 'comparison' && hoveredKLine.value !== null && !isMobile,
+  const showExternalKLineTooltip = computed(
+    () => chartMode.value !== 'comparison' && externalHoveredKLine.value !== null && !isMobile,
   )
-  const hoveredIndex = computed(() => interactionState.value.hoveredIndex)
-  const tooltipPos = computed(() => interactionState.value.tooltipPos)
-  const effectiveTooltipPos = computed(() => tooltipDragPos.value ?? tooltipPos.value)
-  let _cachedTooltipPos = { x: 0, y: 0 }
-  const teleportedTooltipPos = computed(() => {
-    const nextX = effectiveTooltipPos.value.x + tooltipLayerOffset.value.x
-    const nextY = effectiveTooltipPos.value.y + tooltipLayerOffset.value.y
-    if (nextX === _cachedTooltipPos.x && nextY === _cachedTooltipPos.y) {
-      return _cachedTooltipPos
+  const externalKLineTooltipStyle = computed(() => {
+    const position = tooltipDragPos.value ?? externalInteractionState.value.tooltipPos
+    const offset = getTooltipLayerOffset()
+    return {
+      left: `${position.x + offset.x}px`,
+      top: `${position.y + offset.y}px`,
+      position: 'absolute' as const,
+      pointerEvents: (isTooltipDraggable.value ? 'auto' : 'none') as 'auto' | 'none',
+      zIndex: 10,
     }
-    _cachedTooltipPos = { x: nextX, y: nextY }
-    return _cachedTooltipPos
-  })
-  const klineTooltipAnchorStyle = computed(() => ({
-    left: `${teleportedTooltipPos.value.x}px`,
-    top: `${teleportedTooltipPos.value.y}px`,
-  }))
-  let _cachedMarkerTooltipPos = { x: 0, y: 0 }
-  const teleportedMarkerTooltipPos = computed(() => {
-    const nextX = mousePos.value.x + tooltipLayerOffset.value.x
-    const nextY = mousePos.value.y + tooltipLayerOffset.value.y
-    if (nextX === _cachedMarkerTooltipPos.x && nextY === _cachedMarkerTooltipPos.y) {
-      return _cachedMarkerTooltipPos
-    }
-    _cachedMarkerTooltipPos = { x: nextX, y: nextY }
-    return _cachedMarkerTooltipPos
-  })
-  const markerTooltipAnchorStyle = computed(() => ({
-    left: `${teleportedMarkerTooltipPos.value.x}px`,
-    top: `${teleportedMarkerTooltipPos.value.y}px`,
-  }))
-  const tooltipAnchorPlacement = computed(() => interactionState.value.tooltipAnchorPlacement)
-  const markerTooltipAnchorPlacement = computed<'right-bottom' | 'left-bottom'>(() => {
-    const c = controller.value
-    const viewport = c?.viewport.peek()
-    const container = containerRef.value
-    const plotWidth = viewport?.plotWidth ?? (container ? container.clientWidth : 0)
-    const padding = 12
-    const gap = 12
-    const rightCandidateX = mousePos.value.x + gap
-    const wouldOverflowRight = rightCandidateX + markerTooltipSize.value.width + padding > plotWidth
-    return wouldOverflowRight ? 'left-bottom' : 'right-bottom'
   })
 
   /** adaptive 模式下 tooltip 可拖拽（内置与 #kline-tooltip 共用） */
   const isTooltipDraggable = computed(
     () => (chartSettings.value?.tooltipPosition ?? 'adaptive') === 'adaptive',
   )
-
-  const klineTooltipStyle = computed(() => ({
-    left: `${teleportedTooltipPos.value.x}px`,
-    top: `${teleportedTooltipPos.value.y}px`,
-    position: 'absolute' as const,
-    pointerEvents: (isTooltipDraggable.value ? 'auto' : 'none') as 'auto' | 'none',
-    zIndex: 10,
-  }))
-  const markerTooltipStyle = computed(() => ({
-    left: `${teleportedMarkerTooltipPos.value.x}px`,
-    top: `${teleportedMarkerTooltipPos.value.y}px`,
-    position: 'absolute' as const,
-    pointerEvents: 'none' as const,
-    zIndex: 10,
-  }))
 
   const chartData = computed(() => {
     void data.value
@@ -1459,10 +1438,11 @@
     const container = containerRef.value
     if (container) {
       const rect = getContainerRect(container)
-      mousePos.value = {
+      mousePos = {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
       }
+      if (hoveredMarker.value || hoveredCustomMarker.value) positionDefaultMarkerTooltip()
       if (!isEditingLineLabel.value) {
         lineLabelTarget.value = drawingController.value?.getLineLabelTarget(e, container) ?? null
       }
@@ -1548,8 +1528,8 @@
     e.preventDefault()
     e.stopPropagation()
     _tooltipDragOffset = {
-      x: e.clientX - teleportedTooltipPos.value.x,
-      y: e.clientY - teleportedTooltipPos.value.y,
+      x: e.clientX - (tooltipDragPos.value ?? latestInteractionState.tooltipPos).x,
+      y: e.clientY - (tooltipDragPos.value ?? latestInteractionState.tooltipPos).y,
     }
     document.addEventListener('pointermove', onTooltipPointerMove)
     document.addEventListener('pointerup', onTooltipPointerUp)
@@ -1557,9 +1537,10 @@
 
   function onTooltipPointerMove(e: PointerEvent) {
     tooltipDragPos.value = {
-      x: e.clientX - _tooltipDragOffset.x - tooltipLayerOffset.value.x,
-      y: e.clientY - _tooltipDragOffset.y - tooltipLayerOffset.value.y,
+      x: e.clientX - _tooltipDragOffset.x - getTooltipLayerOffset().x,
+      y: e.clientY - _tooltipDragOffset.y - getTooltipLayerOffset().y,
     }
+    positionDefaultKLineTooltip()
   }
 
   function onTooltipPointerUp() {
@@ -1569,6 +1550,7 @@
 
   function onTooltipDblClick() {
     tooltipDragPos.value = null
+    positionDefaultKLineTooltip()
   }
 
   // ── Width / Zoom / Expose ──
@@ -1586,7 +1568,7 @@
   })
 
   const chartContainerStyle = computed(() => {
-    const base: Record<string, string> = { cursor: containerCursor.value }
+    const base: Record<string, string> = {}
     if (leftAxisHostStyle.value.display === 'none') {
       base.borderRadius = '3px 0 0 3px'
       base.borderLeft = '1px solid var(--chart-border)'
@@ -1670,6 +1652,17 @@
         return { id: pane.id, top: separatorTop + borderTop }
       })
     })
+
+    let paneHeaderViewportSignature = ''
+    const updatePaneHeaderViewportSignature = () => {
+      const viewport = ctrl.viewport.peek()
+      const nextSignature = `${viewport.plotWidth}:${viewport.plotHeight}:${viewport.dpr}`
+      if (nextSignature === paneHeaderViewportSignature) return
+      paneHeaderViewportSignature = nextSignature
+      paneHeaderLayoutEpoch.value += 1
+    }
+    updatePaneHeaderViewportSignature()
+    const unsubscribeViewport = ctrl.viewport.subscribe(updatePaneHeaderViewportSignature)
 
     const unsubscribeData = ctrl.data.subscribe(() => {
       const data = ctrl.data.peek()
@@ -1792,6 +1785,7 @@
       unsubscribeData()
       unsubscribeDataLoading()
       unsubscribeDataError()
+      unsubscribeViewport()
       unsubscribePaneLayout()
       unsubscribeTheme()
       unsubscribeDrawingTool()
@@ -1817,15 +1811,45 @@
   }
 
   function setupInteractionCallbacks(ctrl: ChartController): void {
-    ctrl.setTooltipAnchorPositioning(useAnchorPositioning.value)
-    // 引用相等短路：kernel interactionSnapshot 已字段级缓存
+    ctrl.setTooltipAnchorPositioning(false)
     ctrl.interactionState.subscribe(() => {
       const next = ctrl.interactionState.peek()
-      if (interactionState.value === next) return
-      interactionState.value = next
+      latestInteractionState = next
+
+      const stage = chartStageRef.value
+      stage?.classList.toggle('is-dragging', next.isDragging)
+      stage?.classList.toggle('is-resizing-pane', next.isResizingPaneBoundary)
+      stage?.classList.toggle('is-hovering-pane-separator', next.isHoveringPaneBoundary)
+      stage?.classList.toggle('is-hovering-right-axis', next.isHoveringRightAxis)
+      stage?.classList.toggle('is-hovering-kline', next.hoveredIndex !== null)
+      stage?.querySelectorAll<HTMLElement>('.pane-separator-line').forEach((line) => {
+        line.classList.toggle('is-active', line.dataset.paneId === next.hoveredPaneBoundaryId)
+      })
+
+      const container = containerRef.value
+      if (container) {
+        container.style.cursor = next.isDragging
+          ? 'grabbing'
+          : next.isResizingPaneBoundary || next.isHoveringPaneBoundary
+            ? 'ns-resize'
+            : next.hoveredIndex !== null
+              ? 'pointer'
+              : 'crosshair'
+      }
+
+      // 自定义 K 线 tooltip 是调用方显式选择的 Vue slot；仅该分支保留高频响应式 props。
+      if (hasKLineTooltipSlot.value) externalInteractionState.value = next
+
+      if (hoveredMarker.value !== next.hoveredMarkerData) {
+        hoveredMarker.value = next.hoveredMarkerData
+      }
+      if (hoveredCustomMarker.value !== next.hoveredCustomMarker) {
+        hoveredCustomMarker.value = next.hoveredCustomMarker
+      }
+      if (next.hoveredMarkerData || next.hoveredCustomMarker) positionDefaultMarkerTooltip()
     })
 
-    interactionState.value = ctrl.interactionState.peek()
+    latestInteractionState = ctrl.interactionState.peek()
     syncLegendSubscription(ctrl)
 
     // #legend 存在时切换为 external，隐藏 Canvas 图例文字
@@ -1862,7 +1886,6 @@
 
   // ── onMounted ──
   onMounted(async () => {
-    useAnchorPositioning.value = false
     void restoreWatchlist()
 
     // 全屏状态监听（非受控模式下驱动内部状态与 update:isFullscreen）
