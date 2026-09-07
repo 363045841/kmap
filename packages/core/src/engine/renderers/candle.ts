@@ -124,18 +124,6 @@ export function createCandleRenderer(): RendererPlugin {
           downColor,
           scrollLeft,
         )
-        if (usedGpu && context.sceneRenderer.caps.name !== 'webgpu') {
-          const region = {
-            x: 0,
-            y: pane.top,
-            width: context.viewport.plotWidth,
-            height: pane.height,
-            dpr,
-          }
-          context.sceneRenderer.surface.compositeTo(ctx, region, {
-            imageSmoothingEnabled: false,
-          })
-        }
       }
       if (!usedGpu) {
         drawCandlesWithCanvas2D(ctx, scrollLeft, prepared, upColor, downColor)

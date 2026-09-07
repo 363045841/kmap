@@ -13,6 +13,7 @@ function createMockSharedWebGLSurface() {
 
   return {
     isAvailable: vi.fn(() => !disposed),
+    getCanvas: vi.fn(() => mockCanvas),
     resize: vi.fn((w: number, h: number, dpr: number) => {
       mockCanvas.width = Math.max(1, Math.round(w * dpr))
       mockCanvas.height = Math.max(1, Math.round(h * dpr))
@@ -46,6 +47,11 @@ describe('WebGL SurfaceBackend adapter', () => {
     const { backend, mock } = makeBackend()
     expect(backend.isAvailable()).toBe(true)
     expect(mock.isAvailable).toHaveBeenCalled()
+  })
+
+  it('exposes the shared canvas for direct DOM composition', () => {
+    const { backend, mock } = makeBackend()
+    expect((backend as { canvas: HTMLCanvasElement }).canvas).toBe(mock.getCanvas())
   })
 
   it('resize delegates to the underlying surface', () => {

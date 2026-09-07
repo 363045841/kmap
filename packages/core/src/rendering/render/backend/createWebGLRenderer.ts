@@ -166,19 +166,19 @@ export function createWebGLRenderer(surface: SurfaceBackend, gl: SharedWebGLSurf
       // no-op: WebGL has no compute pipelines
     },
 
-    beginFrame(region: SurfaceRegion): void {
+    beginFrame(region: SurfaceRegion, options?: { clear?: boolean }): void {
       if (disposed) return
       currentRegion = { ...region }
       surface.bindRegion(region)
       if (candleSurface) {
         candleSurface.setRegion(toWebGLRegion(region))
         candleSurface.resize(region.width, region.height, region.dpr)
-        candleSurface.clear()
+        if (options?.clear !== false) candleSurface.clear()
       }
       if (lineSurface) {
         lineSurface.setRegion(toWebGLRegion(region))
         lineSurface.resize(region.width, region.height, region.dpr)
-        lineSurface.clear()
+        if (options?.clear !== false) lineSurface.clear()
       }
     },
 

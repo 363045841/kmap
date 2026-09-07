@@ -1206,7 +1206,7 @@ export class Chart {
   }
 
   /**
-   * M2：将 WebGPU canvas 挂到 plot 区（main 与 overlay 之间），非 webgpu 时移除。
+   * 将 GPU canvas 挂到 plot 区（main 与 overlay 之间），Canvas2D 后端时移除。
    * 多 pane 共用一张 canvas，region.y + scissor 区分。
    */
   private syncGpuSceneCanvas(): void {
@@ -1215,7 +1215,7 @@ export class Chart {
     const effective = this.rendererHost.runtime.effective
     const existing = layer.querySelector('canvas.gpu-scene-canvas') as HTMLCanvasElement | null
 
-    if (effective !== 'webgpu') {
+    if (effective === 'canvas') {
       existing?.remove()
       return
     }

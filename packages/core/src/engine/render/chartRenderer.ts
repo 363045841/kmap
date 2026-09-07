@@ -767,9 +767,9 @@ export class ChartRenderer {
       const xH = xCtx.canvas.height
       xCtx.clearRect(0, 0, xW, xH)
     }
-    // M2 hybrid：可见 WebGPU canvas 不经 2D clearRect，需显式 transparent clear
+    // 可见 GPU canvas 不经 2D clearRect，需显式 transparent clear
     const scene = this.deps.getSceneRenderer()
-    if (scene.caps.name === 'webgpu') {
+    if (scene.caps.name !== 'canvas2d') {
       scene.surface.clearRegion({
         x: 0,
         y: 0,
@@ -1037,7 +1037,8 @@ export class ChartRenderer {
       }
       // 画 overlay canvas（仅 overlay 角色 layer）；All 级也画
       if (shouldUpdateOverlay) {
-        sceneRenderer.beginFrame(region)
+        // GPU 主层在本帧已经清过；overlay 不得清除其可见 GPU 内容。
+        sceneRenderer.beginFrame(region, { clear: false })
         this.scene.paintPane(
           {
             renderer: sceneRenderer,

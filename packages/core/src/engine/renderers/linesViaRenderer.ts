@@ -54,15 +54,13 @@ export function drawLinesViaRenderer(
   }
 }
 
-/** WebGPU 走可见 DOM canvas，禁止 drawImage 回 2D（M2 hybrid） */
+/** GPU 后端走可见 DOM canvas，禁止 drawImage 回 2D。 */
 export function shouldCompositeSceneRenderer(renderer: Renderer): boolean {
-  return renderer.caps.name !== 'webgpu'
+  return renderer.caps.name === 'canvas2d'
 }
 
 /**
- * 将 sceneRenderer 输出合成到主 canvas。
- * WebGL：即时 composite（MSAA resolve 会盖掉 shared 上前序内容，须按层立即合成）。
- * WebGPU：no-op，由 plot 区可见 GPU canvas 直接显示。
+ * Canvas2D 后端保留兼容入口；GPU 后端由 plot 区可见 canvas 直接显示。
  */
 export function compositeSceneRenderer(context: {
   ctx: CanvasRenderingContext2D
@@ -191,7 +189,7 @@ function bakeAlphaIntoColor(color: string, alpha: number): string {
 /**
  * 填充带 GPU：仅 sceneRenderer fill；失败返回 false。
  * @param alpha composite 时的全局透明度（半透明 bandFill）
- * @remarks WebGL 走 compositeTo(alpha)；WebGPU hybrid 把 alpha 烘焙进 fill color
+ * @remarks GPU canvas 直接显示，透明度须烘焙进 fill color。
  */
 export function tryDrawFilledBandGpu(
   context: RenderContext,

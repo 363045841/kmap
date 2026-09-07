@@ -52,7 +52,10 @@ export interface Renderer {
 
   // --- 帧 ---
 
-  beginFrame(region: SurfaceRegion): void
+  /**
+   * 绑定本次绘制区域；overlay 绘制可保留此前的 GPU 内容。
+   */
+  beginFrame(region: SurfaceRegion, options?: { clear?: boolean }): void
   /**
    * 返回 true 表示本批已成功提交 GPU（或 instanceCount<=0 无需绘制）。
    * 返回 false 表示未画上（无 surface / pipeline 不匹配 / 资源缺失）——调用方应 fail-closed 走 2D。
