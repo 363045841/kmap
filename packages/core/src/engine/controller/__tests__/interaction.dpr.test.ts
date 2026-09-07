@@ -172,6 +172,8 @@ function createChartStub(args: {
     hitTestCustomMarker: (x: number, y: number) => any
   }
   dataView?: ChartDataView
+  scrollTo?: (value: number) => boolean
+  scheduleDraw?: () => void
 }) {
   const container = document.createElement('div') as HTMLDivElement
   Object.defineProperty(container, 'scrollLeft', { configurable: true, writable: true, value: 0 })
@@ -181,6 +183,7 @@ function createChartStub(args: {
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 320, height: 200 }),
   })
+  container.setPointerCapture = () => undefined
 
   const data: KLineData[] = [
     {
@@ -261,9 +264,10 @@ function createChartStub(args: {
         readonly: {
           scrollLeft: { peek: () => 0 },
           scrollLeftLogical: { peek: () => 0 },
+          maxScrollLeft: { peek: () => 1_000 },
         },
         actions: {
-          scrollTo: () => undefined,
+          scrollTo: args.scrollTo ?? (() => false),
         },
       },
       settings: {
@@ -274,6 +278,7 @@ function createChartStub(args: {
       mode: {
         readonly: {
           dataView: { peek: () => args.dataView ?? ChartDataViewId.KLine },
+          interactionCapabilities: { peek: () => ({ allowPan: true }) },
         },
       },
     },
@@ -284,7 +289,7 @@ function createChartStub(args: {
     getInternalData: () => data,
     currentPeriod: 'daily',
     translatePrice: () => undefined,
-    scheduleDraw: () => undefined,
+    scheduleDraw: args.scheduleDraw ?? (() => undefined),
     zoomAt: () => undefined,
     resetPriceOffset: () => undefined,
     resetPriceTransform: () => undefined,
@@ -296,6 +301,26 @@ function createChartStub(args: {
 }
 
 describe('InteractionController DPR consumption', () => {
+  it('requests the shared render frame after a programmatic pan changes scroll state', () => {
+    const scrollTo = vi.fn(() => true)
+    const scheduleDraw = vi.fn()
+    const chart = createChartStub({
+      dpr: 1,
+      plotWidth: 300,
+      plotHeight: 160,
+      scrollTo,
+      scheduleDraw,
+    })
+    const interaction = new InteractionController(chart as never, createMockInteractionState())
+
+    interaction.onPointerDown({ clientX: 100, clientY: 40, isPrimary: true, pointerId: 1 } as PointerEvent)
+    scheduleDraw.mockClear()
+    interaction.onPointerMove({ clientX: 80, clientY: 40, isPrimary: true } as PointerEvent)
+
+    expect(scrollTo).toHaveBeenCalledWith(20)
+    expect(scheduleDraw).toHaveBeenCalledOnce()
+  })
+
   it('uses viewport plot bounds for hit boundary checks', () => {
     const chart = createChartStub({ dpr: 2, plotWidth: 100, plotHeight: 80 })
     const interaction = new InteractionController(chart as never, createMockInteractionState())

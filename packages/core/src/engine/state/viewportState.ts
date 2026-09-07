@@ -304,16 +304,17 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
 
   let canvasDomEffect: (() => void) | null = null
   let webglEffect: (() => void) | null = null
-  let scrollDomEffect: (() => void) | null = null
+  let contentWidthDomEffect: (() => void) | null = null
 
   /**
    * 写入请求 scrollLeft；与当前值相等时跳过，避免 pan 重复事件空通知。
    */
-  const setRequestedScrollLeft = (value: number): void => {
+  const setRequestedScrollLeft = (value: number): boolean => {
     const normalized = Number.isFinite(value) ? value : 0
     const clamped = Math.max(0, Math.min(normalized, maxScrollLeft.peek()))
-    if (signals.requestedScrollLeft.peek() === clamped) return
+    if (signals.requestedScrollLeft.peek() === clamped) return false
     signals.requestedScrollLeft.set(clamped)
+    return true
   }
 
   const syncFromDomScroll = () => {
@@ -345,13 +346,14 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
       const dpr = readonly.dpr()
       _resizeSharedWebGLSurface(plotWidth, plotHeight, dpr)
     })
-    scrollDomEffect = effect(() => {
+    contentWidthDomEffect = effect(() => {
       if (!readonly.initialized()) return
       const derivedContentWidth = contentWidth()
-      const derivedScrollLeft = scrollLeft()
-      const dom = _getDom()
-      if (dom.scrollContent) dom.scrollContent.style.width = `${derivedContentWidth}px`
-      if (dom.container) dom.container.scrollLeft = derivedScrollLeft
+      const scrollContent = _getDom().scrollContent
+      const cssWidth = `${derivedContentWidth}px`
+      if (scrollContent && scrollContent.style.width !== cssWidth) {
+        scrollContent.style.width = cssWidth
+      }
     })
   }
 
@@ -423,12 +425,12 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
       /**
        * 滚动到指定 scrollLeft 位置。
        *
-       * @remarks 仅更新内部信号，DOM 同步由 effect 负责。
+       * @remarks 仅更新内部信号；DOM 提交由 ChartRenderer 帧事务负责。
        *
        * @param v - 目标 scrollLeft（CSS px）
        */
-      scrollTo(v: number) {
-        setRequestedScrollLeft(v)
+      scrollTo(v: number): boolean {
+        return setRequestedScrollLeft(v)
       },
 
       /**
@@ -504,10 +506,10 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
     dispose() {
       canvasDomEffect?.()
       webglEffect?.()
-      scrollDomEffect?.()
+      contentWidthDomEffect?.()
       canvasDomEffect = null
       webglEffect = null
-      scrollDomEffect = null
+      contentWidthDomEffect = null
       batch(() => {
         signals.initialized.set(false)
         signals.preciseDpr.set(0)
