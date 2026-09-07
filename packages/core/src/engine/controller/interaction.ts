@@ -324,6 +324,10 @@ export class InteractionController {
     this.activePaneIdOnDrag = null
     this.activeSeparatorUpperPaneId = null
     this._cachedMaxScrollLeft = -1
+    // 鼠标平移结束后按当前指针位置恢复 hover；触屏由 explore 模式单独控制。
+    if (wasPanning && !this.isTouchSession) {
+      this.queueHoverFlush()
+    }
   }
 
   /**
@@ -428,6 +432,8 @@ export class InteractionController {
         const clamped = Math.min(Math.max(0, this.scrollStartX + deltaX), this._cachedMaxScrollLeft)
         const dpr = this.chart.getCurrentDpr()
         if (this.chart.kernel.viewport.actions.scrollTo(Math.round(clamped * dpr) / dpr)) {
+          // 平移期间不保留旧帧的十字线、tooltip 与 marker hover。
+          this.clearHover()
           // 程序化滚动不再依赖原生 scroll 回调驱动重绘；统一交给 ChartRenderer 帧事务。
           this.chart.scheduleDraw()
         }
@@ -436,6 +442,8 @@ export class InteractionController {
         this.dragStartY = e.clientY
         if (deltaY !== 0 && this.activePaneIdOnDrag === 'main') {
           if (!this.settings.disableMainPaneVerticalScroll) {
+            // 主图纵向平移同样属于滚动交互，隐藏十字线直到鼠标松开。
+            this.clearHover()
             this.chart.translatePrice(this.activePaneIdOnDrag, deltaY)
           }
         }
