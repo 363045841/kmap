@@ -84,6 +84,7 @@ import {
   type ChartDataView,
 } from './state/modeState'
 import { ChartViewportManager } from './viewport/chartViewportManager'
+import { ViewportScrollBridge } from './viewport/viewportScrollBridge'
 import { ChartZoomController } from './utils/chartZoomController'
 import { getPhysicalKLineConfig } from './utils/klineConfig'
 import type {
@@ -134,6 +135,8 @@ export class Chart {
   readonly kernel: ChartStateKernel
 
   private viewportManager: ChartViewportManager
+  /** 唯一的 renderer 程序滚动与原生 scroll 回流协调器。 */
+  private viewportScrollBridge: ViewportScrollBridge
   private layoutManager: ChartPaneLayout
   private get paneRenderers(): PaneRenderer[] {
     return this.layoutManager.getPaneRenderers()
@@ -224,6 +227,7 @@ export class Chart {
     },
   ) {
     this.dom = dom
+    this.viewportScrollBridge = new ViewportScrollBridge(() => this.dom.container)
     const { kWidth: _kWidth, kGap: _kGap, ...restOpt } = opt
     this.marketSessions = new MarketSessionRegistry(runtime?.marketSessions)
     this.pluginHost = createPluginHost()
@@ -270,6 +274,7 @@ export class Chart {
     this.viewportManager = new ChartViewportManager(
       {
         getDom: () => this.dom,
+        onScroll: () => this.handleScrollEvent(),
         onResizeCompleted: () => {
           this.resize()
         },
@@ -398,6 +403,7 @@ export class Chart {
       zoom: this.kernel.zoom,
       options: this.kernel.options,
       viewport: this.kernel.viewport,
+      commitViewportScroll: (targetScrollLeft) => this.viewportScrollBridge.commit(targetScrollLeft),
       getDataManager: () => this.dataManager,
       getIndicatorManager: () => this.indicatorManager,
       getActiveMode: () => this.activeMode,
@@ -1248,6 +1254,7 @@ export class Chart {
     // onUninstall 由 Manager 单点负责；须在 scene.dispose 之前 clear
     this.rendererPluginManager.clear()
     this.renderer.destroy()
+    this.viewportScrollBridge.dispose()
     this.dataManager.destroy()
     this.viewportManager.destroy()
     this.layoutManager.destroy()
@@ -1594,8 +1601,11 @@ export class Chart {
    * 将 DOM 滚动位置原子写入 viewport，再触发交互清理与整帧重绘。
    */
   handleScrollEvent(): void {
-    this.kernel.viewport.actions.syncFromDomScroll()
-    this.interaction.onScroll()
+    const container = this.dom.container
+    if (!container || !this.viewportScrollBridge.isExternalScroll(container.scrollLeft)) return
+    if (this.kernel.viewport.actions.syncFromDomScroll()) {
+      this.interaction.onScroll()
+    }
   }
 
   /**

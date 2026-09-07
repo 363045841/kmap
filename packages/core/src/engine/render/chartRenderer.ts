@@ -137,12 +137,6 @@ export function mergeUpdateLevel(current: UpdateLevel, next: UpdateLevel): Updat
 }
 
 /** 在绘制帧内提交 viewport 的原生滚动位置，跳过无变化写入。 */
-export function commitViewportScroll(container: HTMLElement | null, targetScrollLeft: number): void {
-  if (container && container.scrollLeft !== targetScrollLeft) {
-    container.scrollLeft = targetScrollLeft
-  }
-}
-
 export interface RendererDependencies {
   getDom: () => ChartDom
   getOption: () => ResolvedChartOptions
@@ -159,6 +153,8 @@ export interface RendererDependencies {
   options: OptionsStateModule
   /** scroll / dpr / plot 几何 SSOT */
   viewport: ViewportStateModule
+  /** 由 Chart 的 ViewportScrollBridge 在 render frame 内提交原生滚动。 */
+  commitViewportScroll: (targetScrollLeft: number) => void
   getDataManager: () => ChartDataManager
   getIndicatorManager: () => ChartIndicatorManager
   getActiveMode: () => ChartModeHandler
@@ -486,10 +482,7 @@ export class ChartRenderer {
 
   /** 将最新 viewport 位置同步到原生滚动容器，作为绘制帧的第一项 DOM 副作用。 */
   private commitViewportScroll(): void {
-    commitViewportScroll(
-      this.deps.getDom().container,
-      this.deps.viewport.readonly.scrollLeft.peek(),
-    )
+    this.deps.commitViewportScroll(this.deps.viewport.readonly.scrollLeft.peek())
   }
 
   /** 将 prepareFrameData 的帧几何按 level 画到 canvas，含所有 pane 的 main/overlay/yAxis 及时间轴 */

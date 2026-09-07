@@ -13,5 +13,6 @@ Pointer pan events can arrive more frequently than display refresh. Writing `scr
 - State actions update the requested scroll position immediately and remain the source of truth.
 - The content-width effect owns only `scrollContent.style.width`.
 - `InteractionController` requests the existing render frame after programmatic pan; repeated pointer events are coalesced by `ChartRenderer`.
-- `ChartRenderer` writes the latest scroll position only when it differs from the native value, then paints canvas in that same frame transaction.
+- `ChartRenderer` delegates its frame-start scroll commit to `ViewportScrollBridge`, then paints canvas in the same frame transaction.
+- `ViewportScrollBridge` records the browser-accepted programmatic value. The sole native listener consumes a matching event; a different value is user input and flows through state before requesting the next render frame.
 - `viewportState` has no independent scroll scheduler, so it cannot mutate the DOM after renderer disposal or race canvas painting.

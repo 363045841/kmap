@@ -317,11 +317,9 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
     return true
   }
 
-  const syncFromDomScroll = () => {
+  const syncFromDomScroll = (): boolean => {
     const container = _getDom().container
-    if (container) {
-      setRequestedScrollLeft(container.scrollLeft)
-    }
+    return container ? setRequestedScrollLeft(container.scrollLeft) : false
   }
 
   /**
@@ -438,8 +436,8 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
        *
        * @remarks 在外部滚动事件中调用，使 signal 与 DOM 保持一致。
        */
-      syncFromDomScroll() {
-        syncFromDomScroll()
+      syncFromDomScroll(): boolean {
+        return syncFromDomScroll()
       },
 
       /**
