@@ -41,6 +41,38 @@ export function getVisibleRange(
 }
 
 /**
+ * 计算仍可见有效 K 线的最大横向滚动位置。
+ *
+ * 尾部空槽属于内容布局，允许展示；但视口不能完全落入空槽，
+ * 否则主图与指标轴会失去可用于计算范围的数据。
+ *
+ * @param contentMaxScrollLeft - 内容宽度允许的最大横向滚动位置（逻辑像素）
+ * @param leftLoadBufferWidth - 左侧增量加载缓冲宽度（逻辑像素）
+ * @param kWidth - 单根 K 线宽度（逻辑像素）
+ * @param kGap - K 线间距（逻辑像素）
+ * @param totalDataCount - 数据总条数
+ * @param dpr - 设备像素比
+ * @returns 同时满足内容边界与可见数据边界的最大横向滚动位置（逻辑像素）
+ */
+export function computeMaxScrollLeftWithVisibleData(
+  contentMaxScrollLeft: number,
+  leftLoadBufferWidth: number,
+  kWidth: number,
+  kGap: number,
+  totalDataCount: number,
+  dpr: number = 1,
+): number {
+  if (totalDataCount === 0) return contentMaxScrollLeft
+
+  const { kWidthPx, unitPx, startXPx } = getPhysicalKLineConfig(kWidth, kGap, dpr)
+  // 保留最后一根 K 线的至少一个物理像素，尾部空槽仍可正常显示。
+  const lastVisibleDataScrollLeft =
+    leftLoadBufferWidth +
+    (startXPx + (totalDataCount - 1) * unitPx + kWidthPx - 1) / dpr
+  return Math.min(contentMaxScrollLeft, lastVisibleDataScrollLeft)
+}
+
+/**
  * 将 raw visible range 钳制为可索引区间。
  *
  * @remarks getVisibleRange 左右各扩 1 根时 start 可能为 -1；

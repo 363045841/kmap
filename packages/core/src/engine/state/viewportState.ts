@@ -8,7 +8,11 @@ import {
 } from '../../foundation/reactivity/signal'
 import type { Viewport, ViewportState } from '../chartTypes'
 import type { VisibleRange } from '../layout/pane'
-import { clampVisibleRange, getVisibleRange } from '../viewport/viewport'
+import {
+  clampVisibleRange,
+  computeMaxScrollLeftWithVisibleData,
+  getVisibleRange,
+} from '../viewport/viewport'
 import { computeTimeShareVisibleRange } from '../modes/timeShareMath'
 import {
   computeLeftLoadBufferWidth as pureLeftBuffer,
@@ -183,7 +187,18 @@ export function createViewportState(signalDeps: ViewportSignalDeps) {
       timeShareSlotWidth: readTimeShareSlotWidth(),
     })
   })
-  const maxScrollLeft = computed(() => pureMaxScrollLeft(contentWidth(), readonly.viewWidth()))
+  const maxScrollLeft = computed(() => {
+    const contentMaxScrollLeft = pureMaxScrollLeft(contentWidth(), readonly.viewWidth())
+    const options = signalDeps.options$()
+    return computeMaxScrollLeftWithVisibleData(
+      contentMaxScrollLeft,
+      readonly.leftLoadBufferWidth(),
+      options.kWidth,
+      kGap(),
+      signalDeps.dataLength$(),
+      readonly.dpr(),
+    )
+  })
   const scrollLeft = computed(() =>
     Math.max(0, Math.min(readonly.requestedScrollLeft(), maxScrollLeft())),
   )

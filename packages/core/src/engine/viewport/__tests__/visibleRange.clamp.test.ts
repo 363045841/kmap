@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { createSignal } from '../../../foundation/reactivity/signal'
 import { createViewportState } from '../../state/viewportState'
-import { clampVisibleRange, getVisibleRange } from '../viewport'
+import {
+  clampVisibleRange,
+  computeMaxScrollLeftWithVisibleData,
+  getVisibleRange,
+} from '../viewport'
 
 describe('clampVisibleRange', () => {
   it('clamps negative start to 0 and preserves end', () => {
@@ -20,6 +24,20 @@ describe('getVisibleRange raw expansion', () => {
     const raw = getVisibleRange(0, 800, 8, 2, 100, 1)
     expect(raw.start).toBeLessThan(0)
     expect(raw.end).toBeGreaterThan(0)
+  })
+})
+
+describe('computeMaxScrollLeftWithVisibleData', () => {
+  it('limits the trailing blank slots before the visible range becomes empty', () => {
+    const maxScrollLeft = computeMaxScrollLeftWithVisibleData(1_000, 0, 8, 2, 10, 1)
+    const range = getVisibleRange(maxScrollLeft, 1, 8, 2, 10, 1)
+
+    expect(maxScrollLeft).toBe(89)
+    expect(range.start).toBeLessThan(10)
+  })
+
+  it('preserves the content boundary when there is no data', () => {
+    expect(computeMaxScrollLeftWithVisibleData(1_000, 0, 8, 2, 0, 1)).toBe(1_000)
   })
 })
 
@@ -66,5 +84,22 @@ describe('viewportState visibleRange SSOT', () => {
     expect(clamped.start).toBe(0)
     expect(clamped.end).toBe(240)
     expect(raw.end).toBe(240)
+  })
+
+  it('keeps the final K-line in range at the maximum scroll position after zooming in', () => {
+    const dataLength$ = createSignal(10)
+    const module = createViewportState({
+      options$: (() => ({ bottomAxisHeight: 30, kWidth: 100, kGap: 2 })) as any,
+      dataLength$,
+      period$: (() => 'daily') as any,
+      zoomLevel$: (() => 3) as any,
+    })
+
+    module.actions.resize(100, 400, 1)
+    module.actions.scrollTo(Number.MAX_SAFE_INTEGER)
+
+    const range = module.readonly.visibleRange()
+    expect(range.start).toBeLessThan(10)
+    expect(range.end).toBe(10)
   })
 })
