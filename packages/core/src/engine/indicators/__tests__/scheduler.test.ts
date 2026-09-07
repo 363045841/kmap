@@ -314,6 +314,22 @@ describe('IndicatorScheduler', () => {
       expect(Number.isFinite(updatedState!.visibleMax)).toBe(true)
       expect(invalidate).toHaveBeenCalledTimes(1)
     })
+
+    it('updates visible extremes inside the caller frame without scheduling another draw', () => {
+      const data = createTestData(100, 100)
+      const invalidate = vi.fn()
+      scheduler.setInvalidateCallback(invalidate)
+
+      scheduler.update(data, { start: 0, end: 0 })
+      invalidate.mockClear()
+
+      expect(scheduler.updateVisibleRangeForFrame({ start: 30, end: 60 })).toBe(true)
+
+      const updatedState = getStateFromMockCalls<BOLLRenderState>(mockHost, BOLL_STATE_KEY)
+      expect(updatedState).toBeDefined()
+      expect(updatedState!.visibleMin).toBeLessThan(updatedState!.visibleMax)
+      expect(invalidate).not.toHaveBeenCalled()
+    })
   })
 
   describe('MA config update', () => {

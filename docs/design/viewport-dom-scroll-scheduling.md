@@ -16,3 +16,7 @@ Pointer pan events can arrive more frequently than display refresh. Writing `scr
 - `ChartRenderer` delegates its frame-start scroll commit to `ViewportScrollBridge`, then paints canvas in the same frame transaction.
 - `ViewportScrollBridge` records the browser-accepted programmatic value. The sole native listener consumes a matching event; a different value is user input and flows through state before requesting the next render frame.
 - `viewportState` has no independent scroll scheduler, so it cannot mutate the DOM after renderer disposal or race canvas painting.
+
+## Related Frame Rules
+
+`ChartRenderer` is also the only frame owner for indicator visible-range projection. `IndicatorScheduler` may synchronously update projection state during an active render frame, but it never creates a second rAF for visual work. Frame snapshot derivation remains pure: cache replacement and incremental-load checks run only after a successful frame render.

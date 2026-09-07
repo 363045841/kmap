@@ -486,13 +486,6 @@ export class Chart {
       this.evaluateAlerts(data, this.dataManager.getCurrentVisibleRange() ?? { start: 0, end: 0 })
     })
 
-    // 绑定 visibleRange 信号 — 替代 prepareFrameData 中的手动 updateVisibleRange
-    this.indicatorManager.indicatorSchedulerAccessor.setVisibleRangeSignal(
-      this.kernel.viewport.readonly.visibleRange as unknown as ReadonlySignal<{
-        start: number
-        end: number
-      } | null>,
-    )
     this.startRuntime()
   }
 

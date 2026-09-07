@@ -86,7 +86,7 @@ import type {
   SerializedRuntimeDescriptor,
 } from './workerProtocol'
 import type { IndicatorWorkerResponse } from './workerProtocol'
-import { computed, effect, type ReadonlySignal } from '../../foundation/reactivity/signal'
+import { computed, type ReadonlySignal } from '../../foundation/reactivity/signal'
 
 /**
  * 可见范围
@@ -198,10 +198,6 @@ export class IndicatorScheduler {
 
   // Worker 异步结果应用完毕回调（用于串联其他管线，如 Alert）
   private onResultsAppliedCallback: (() => void) | null = null
-
-  /** rAF 节流的 visible state 更新，避免 onPointerMove 等频繁信号变化触发多次重算 */
-  private _pendingVisibleUpdate = false
-  private _visibleUpdateRaf: number | null = null
 
   /** 从 Chart 获取活跃副图 paneId 列表的回调 */
   private getActiveSubPaneIds: (() => string[]) | null = null
@@ -337,47 +333,9 @@ export class IndicatorScheduler {
   }
 
   /**
-   * 绑定 visibleRange 信号 — 替代手动 updateVisibleRange 调用。
-   * signal 变化时自动更新内部 visibleRange 并重算 visible state。
-   */
-  setVisibleRangeSignal(signal: ReadonlySignal<{ start: number; end: number } | null>): void {
-    let prevStart = -1
-    let prevEnd = -1
-    effect(() => {
-      const range = signal()
-      if (range && (range.start !== prevStart || range.end !== prevEnd)) {
-        prevStart = range.start
-        prevEnd = range.end
-        this.visibleRange = range
-        if (this.getLatestBundle()) {
-          this._scheduleVisibleStateUpdate()
-        }
-      }
-    })
-  }
-
-  private _scheduleVisibleStateUpdate(): void {
-    if (this._pendingVisibleUpdate) return
-    this._pendingVisibleUpdate = true
-    this._visibleUpdateRaf = requestAnimationFrame(() => {
-      this._visibleUpdateRaf = null
-      this._pendingVisibleUpdate = false
-      const mainStateUpdated = this.updateVisibleStatesOnly()
-      if (mainStateUpdated) {
-        this.invalidateCallback?.()
-      }
-    })
-  }
-
-  /**
    * 销毁调度器
    */
   destroy(): void {
-    if (this._visibleUpdateRaf !== null) {
-      cancelAnimationFrame(this._visibleUpdateRaf)
-      this._visibleUpdateRaf = null
-    }
-    this._pendingVisibleUpdate = false
     this.terminateWorker()
     this.inlineRuntime = null
     this.invalidateCallback = null
@@ -885,15 +843,25 @@ export class IndicatorScheduler {
    * 视口变更时调用 - 同步处理，不走 Worker
    */
   updateVisibleRange(visibleRange: VisibleRange): void {
-    this.visibleRange = visibleRange
+    if (!this.updateVisibleRangeForFrame(visibleRange)) return
+    this.invalidateCallback?.()
+  }
 
-    // 基于缓存的 series 同步更新极值
-    if (this.getLatestBundle()) {
-      const mainStateUpdated = this.updateVisibleStatesOnly()
-      if (mainStateUpdated) {
-        this.invalidateCallback?.()
-      }
+  /**
+   * 在 ChartRenderer 的活动帧内投影可见区指标状态，不单独请求下一帧。
+   *
+   * @param visibleRange - 本帧已封存的可见数据区间。
+   * @returns 是否更新了指标投影。
+   */
+  updateVisibleRangeForFrame(visibleRange: VisibleRange): boolean {
+    if (
+      this.visibleRange.start === visibleRange.start &&
+      this.visibleRange.end === visibleRange.end
+    ) {
+      return false
     }
+    this.visibleRange = visibleRange
+    return this.getLatestBundle() ? this.updateVisibleStatesOnly() : false
   }
 
   /**
