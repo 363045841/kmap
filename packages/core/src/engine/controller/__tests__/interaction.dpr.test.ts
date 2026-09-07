@@ -288,6 +288,7 @@ function createChartStub(args: {
     getRenderData: () => data,
     getInternalData: () => data,
     currentPeriod: 'daily',
+    checkVisibleRangeGap: () => undefined,
     translatePrice: () => undefined,
     scheduleDraw: args.scheduleDraw ?? (() => undefined),
     zoomAt: () => undefined,
@@ -319,6 +320,28 @@ describe('InteractionController DPR consumption', () => {
 
     expect(scrollTo).toHaveBeenCalledWith(20)
     expect(scheduleDraw).toHaveBeenCalledOnce()
+  })
+
+  it('hides hover while panning and restores it after mouse release', () => {
+    const chart = createChartStub({ dpr: 1, plotWidth: 300, plotHeight: 160, scrollTo: () => true })
+    const interaction = new InteractionController(chart as never, createMockInteractionState())
+    interaction.setKLinePositions([0, 10], { start: 0, end: 2 }, 10)
+
+    interaction.onPointerMove({ clientX: 50, clientY: 40, isPrimary: true } as PointerEvent)
+    interaction.flushPendingHover()
+    expect(interaction.crosshairPos).not.toBeNull()
+
+    interaction.onPointerDown({ clientX: 50, clientY: 40, isPrimary: true, pointerId: 1 } as PointerEvent)
+    interaction.onPointerMove({ clientX: 30, clientY: 40, isPrimary: true } as PointerEvent)
+    expect(interaction.crosshairPos).toBeNull()
+    expect(interaction.hoveredIndex).toBeNull()
+
+    interaction.onPointerUp({ clientX: 30, clientY: 40, isPrimary: true, pointerId: 1 } as PointerEvent)
+    // 渲染帧先封存平移后的几何，再用松手位置恢复 hover。
+    interaction.setKLinePositions([20, 30], { start: 0, end: 2 }, 10)
+    interaction.flushPendingHover()
+    expect(interaction.crosshairPos).not.toBeNull()
+    expect(interaction.hoveredIndex).not.toBeNull()
   })
 
   it('uses viewport plot bounds for hit boundary checks', () => {

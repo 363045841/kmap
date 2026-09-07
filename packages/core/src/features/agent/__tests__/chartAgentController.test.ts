@@ -7,6 +7,7 @@ import { DrawingCommands } from '../../../engine/drawing/DrawingCommands'
 import { MarketDataProviderRegistry } from '../../../data/provider/registry'
 import { MarketDataCache } from '../../../data/buffer/marketDataCache'
 import { createSignal } from '../../../foundation/reactivity/signal'
+import { AGENT_DRAWING_COLOR_VALUES } from '../../../foundation/tokens/agentDrawingColors'
 import { createChartAgentController } from '../chartAgentController'
 import { getRegisteredChartTools } from '../chartAgentController'
 import { CHART_AGENT_ERROR_CODES } from '../errors'
@@ -438,7 +439,7 @@ describe('createChartAgentController', () => {
           { tradingDate: '2026-09-01', price: 10 },
           { tradingDate: '2026-09-02', price: 12 },
         ],
-        labels: { line: { 0: '初始趋势' }, area: {} },
+        labels: { line: { 0: { text: '初始趋势', position: 'center' } }, area: {} },
       },
       { signal, progress: () => undefined },
     )) as { id: string; anchors: Array<{ timestamp: number; price: number; index?: number }> }
@@ -447,14 +448,16 @@ describe('createChartAgentController', () => {
       { timestamp: Date.parse('2026-09-01') + 25_200_000, price: 10 },
       { timestamp: Date.parse('2026-09-02'), price: 12 },
     ])
-    expect(created).toMatchObject({ labels: { line: { 0: '初始趋势' }, area: {} } })
+    expect(created).toMatchObject({
+      labels: { line: { 0: { text: '初始趋势', position: 'center' } }, area: {} },
+    })
     await expect(
       update.execute(
         fixture.controller,
         {
           drawingId: created.id,
           patch: {
-            labels: { line: { 0: '更新趋势' }, area: {} },
+            labels: { line: { 0: { text: '更新趋势', position: 'end' } }, area: {} },
             anchors: [
               { tradingDate: '2026-09-03', price: 11 },
               { tradingDate: '2026-09-04', price: 13 },
@@ -469,7 +472,7 @@ describe('createChartAgentController', () => {
         { timestamp: Date.parse('2026-09-03'), price: 11 },
         { timestamp: Date.parse('2026-09-04'), price: 13 },
       ],
-      labels: { line: { 0: '更新趋势' }, area: {} },
+      labels: { line: { 0: { text: '更新趋势', position: 'end' } }, area: {} },
     })
     await expect(
       list.execute(fixture.controller, {}, { signal, progress: () => undefined }),
@@ -497,6 +500,48 @@ describe('createChartAgentController', () => {
         { signal, progress: () => undefined },
       ),
     ).resolves.toMatchObject({ kind: 'horizontal-line', anchors: [{ timestamp: null, price: 9 }] })
+  })
+
+  it('limits Agent drawing colors to the dedicated token presets', async () => {
+    const fixture = createFixture()
+    const create = getRegisteredChartTools().find((tool) => tool.config.name === 'drawing_create')!
+    const update = getRegisteredChartTools().find((tool) => tool.config.name === 'drawing_update')!
+    const execution = { signal: new AbortController().signal, progress: () => undefined }
+    const [stroke, fill, textColor] = AGENT_DRAWING_COLOR_VALUES
+
+    const created = (await create.execute(
+      fixture.controller,
+      {
+        kind: 'horizontal-line',
+        paneId: 'main',
+        anchors: [{ price: 9 }],
+        style: { stroke, fill, textColor },
+      },
+      execution,
+    )) as { id: string; style: Record<string, string> }
+
+    expect(created.style).toMatchObject({ stroke, fill, textColor })
+    await expect(
+      update.execute(
+        fixture.controller,
+        { drawingId: created.id, patch: { style: { stroke: '#0F8B5C' } } },
+        execution,
+      ),
+    ).rejects.toThrow('must be equal to constant')
+    await expect(
+      create.execute(
+        fixture.controller,
+        {
+          kind: 'horizontal-line',
+          paneId: 'main',
+          anchors: [{ price: 10 }],
+          style: { stroke: '#C2363B' },
+        },
+        execution,
+      ),
+    ).rejects.toThrow('must be equal to constant')
+    expect(fixture.drawingDocument.listDrawings()).toHaveLength(1)
+    expect(fixture.requestDraw).toHaveBeenCalledOnce()
   })
 
   it('delegates instrument searches through the shared Provider registry', async () => {

@@ -252,6 +252,29 @@ export { computeLinearRegression }
 
 const LINE_TEXT_GAP_PX = 6
 
+/** 计算线段文字的锚点与本地对齐方式，保证端点文字位于线段外侧。 */
+function getLineTextLayout(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  position: import('../../foundation/plugin').DrawingLabelPosition | undefined,
+): { x: number; y: number; rotation: number; align: CanvasTextAlign } {
+  const ratio = position === 'start' ? 0 : position === 'end' ? 1 : 0.5
+  const x = start.x + (end.x - start.x) * ratio
+  const y = start.y + (end.y - start.y) * ratio
+  let rotation = Math.atan2(end.y - start.y, end.x - start.x)
+  if (rotation > Math.PI / 2) rotation -= Math.PI
+  if (rotation <= -Math.PI / 2) rotation += Math.PI
+
+  const align = position === 'start' ? 'left' : position === 'end' ? 'right' : 'center'
+
+  return {
+    x: x + Math.sin(rotation) * LINE_TEXT_GAP_PX,
+    y: y - Math.cos(rotation) * LINE_TEXT_GAP_PX,
+    rotation,
+    align,
+  }
+}
+
 export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
   return {
     point(ctx, primitive, dpr) {
@@ -285,23 +308,15 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
       ctx.stroke()
 
       if (primitive.text) {
-        // 标签固定在两枚原始锚点之间，不随延长线或视口裁剪漂移。
-        const centerX = (primitive.a.x + primitive.b.x) / 2
-        const centerY = (primitive.a.y + primitive.b.y) / 2
-        let rotation = Math.atan2(primitive.b.y - primitive.a.y, primitive.b.x - primitive.a.x)
-        // 文字与线平行，但始终保持正向可读。
-        if (rotation > Math.PI / 2) rotation -= Math.PI
-        if (rotation <= -Math.PI / 2) rotation += Math.PI
-        // 文本沿线的上侧法线偏移，避免字形覆盖直线。
-        const textX = centerX + Math.sin(rotation) * LINE_TEXT_GAP_PX
-        const textY = centerY - Math.cos(rotation) * LINE_TEXT_GAP_PX
+        // 标签基于原始锚点，不随延长线或视口裁剪漂移。
+        const textLayout = getLineTextLayout(primitive.a, primitive.b, primitive.text.position)
         ctx.save()
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
-        ctx.textAlign = primitive.text.align ?? 'center'
+        ctx.textAlign = primitive.text.align ?? textLayout.align
         ctx.textBaseline = primitive.text.baseline ?? 'middle'
-        ctx.translate(textX, textY)
-        ctx.rotate(rotation)
+        ctx.translate(textLayout.x, textLayout.y)
+        ctx.rotate(textLayout.rotation)
         ctx.fillText(primitive.text.text, 0, 0)
         ctx.restore()
       }
@@ -412,20 +427,18 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
       ctx.closePath()
       ctx.fill()
       if (primitive.text) {
-        const centerX = (primitive.start.x + primitive.end.x) / 2
-        const centerY = (primitive.start.y + primitive.end.y) / 2
-        let rotation = angle
-        if (rotation > Math.PI / 2) rotation -= Math.PI
-        if (rotation <= -Math.PI / 2) rotation += Math.PI
-        const textX = centerX + Math.sin(rotation) * LINE_TEXT_GAP_PX
-        const textY = centerY - Math.cos(rotation) * LINE_TEXT_GAP_PX
+        const textLayout = getLineTextLayout(
+          primitive.start,
+          primitive.end,
+          primitive.text.position,
+        )
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
-        ctx.textAlign = primitive.text.align ?? 'center'
+        ctx.textAlign = primitive.text.align ?? textLayout.align
         ctx.textBaseline = primitive.text.baseline ?? 'middle'
         ctx.save()
-        ctx.translate(textX, textY)
-        ctx.rotate(rotation)
+        ctx.translate(textLayout.x, textLayout.y)
+        ctx.rotate(textLayout.rotation)
         ctx.fillText(primitive.text.text, 0, 0)
         ctx.restore()
       }

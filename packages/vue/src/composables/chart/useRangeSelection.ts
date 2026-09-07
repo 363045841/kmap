@@ -1,10 +1,6 @@
 /** 区间选择状态、统计指标与 CSV 导出逻辑。 */
 import { formatTimestamp } from '@363045841yyt/klinechart-core'
-import type {
-  KLineData,
-  ChartController,
-  ChartViewport,
-} from '@363045841yyt/klinechart-core/controllers'
+import type { KLineData, ChartController } from '@363045841yyt/klinechart-core/controllers'
 import { sourceRouter } from '@363045841yyt/klinechart-core/market-data'
 import type { KLineAdjustment, KLinePeriod } from '@363045841yyt/klinechart-core/market-data'
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
@@ -64,10 +60,9 @@ export function useRangeSelection(options: {
   isRangeSelectMode: Ref<boolean>
   containerRef: Ref<HTMLElement | null>
   data: Readonly<Ref<ReadonlyArray<KLineData>>>
-  viewport: Readonly<Ref<ChartViewport>>
   batchSymbols: Ref<string[]>
 }) {
-  const { controller, isRangeSelectMode, containerRef, data, viewport, batchSymbols } = options
+  const { controller, isRangeSelectMode, containerRef, data, batchSymbols } = options
 
   const customStartDate = ref('')
   const customEndDate = ref('')
@@ -85,6 +80,25 @@ export function useRangeSelection(options: {
   const rangeSelectionReady = computed(
     () =>
       rangeSelection.value.startTimestamp !== null && rangeSelection.value.endTimestamp !== null,
+  )
+  // 仅在区间已选中时跟随滚动刷新 overlay，普通滚动不进入 Vue 调度。
+  const viewportEpoch = ref(0)
+  watch(
+    [controller, rangeSelectionReady],
+    ([chart, ready], _previous, onCleanup) => {
+      if (!chart || !ready) return
+      let previous = ''
+      const sync = () => {
+        const viewport = chart.viewport.peek()
+        const next = `${viewport.visibleFrom}:${viewport.visibleTo}:${viewport.plotWidth}:${viewport.plotHeight}`
+        if (next === previous) return
+        previous = next
+        viewportEpoch.value += 1
+      }
+      sync()
+      onCleanup(chart.viewport.subscribe(sync))
+    },
+    { immediate: true },
   )
 
   const rangeSelectionBounds: ComputedRef<Bounds | null> = computed(() => {
@@ -134,7 +148,7 @@ export function useRangeSelection(options: {
     const bounds = rangeSelectionBounds.value
     if (!bounds) return null
 
-    void viewport.value
+    void viewportEpoch.value
 
     const ctrl = controller.value
     const vp = ctrl?.getViewport()

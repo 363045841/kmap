@@ -62,6 +62,7 @@ export { getPhysicalKLineConfig } from '../engine/utils/klineConfig'
 
 // Indicator types & config
 export type { SubIndicatorType } from '../engine/renderers/Indicator'
+export type { CanvasLegendOptions } from '../engine/renderers/Indicator/mainIndicatorLegend'
 export {
   BUILTIN_INDICATOR_TYPES,
   getBuiltinIndicatorTypeLabel,

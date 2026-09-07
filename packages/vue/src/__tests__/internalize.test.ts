@@ -114,13 +114,13 @@ async function flushMount() {
 }
 
 describe('KLineChart legend slot lifecycle', () => {
-  it('does not subscribe to legend context or enable external mode without a legend slot', async () => {
+  it('does not subscribe to legend context and keeps Canvas legend visible without a legend slot', async () => {
     const wrapper = mount(KlineChart, { attachTo: document.body })
     await flushMount()
 
     expect(mockController.legendSubscriberCount()).toBe(0)
     expect(mockController.rendererConfigCalls()).toEqual([
-      { name: 'mainIndicatorLegend', config: { renderMode: 'canvas' } },
+      { name: 'mainIndicatorLegend', config: { visible: true, visibleIndicatorIds: undefined } },
     ])
 
     wrapper.unmount()
@@ -148,7 +148,7 @@ describe('KLineChart legend slot lifecycle', () => {
     expect(mockController.legendSubscriberCount()).toBe(1)
     expect(mockController.rendererConfigCalls().at(-1)).toEqual({
       name: 'mainIndicatorLegend',
-      config: { renderMode: 'external' },
+      config: { visible: false, visibleIndicatorIds: undefined },
     })
 
     showLegend.value = false
@@ -158,7 +158,7 @@ describe('KLineChart legend slot lifecycle', () => {
     expect(mockController.legendSubscriberCount()).toBe(0)
     expect(mockController.rendererConfigCalls().at(-1)).toEqual({
       name: 'mainIndicatorLegend',
-      config: { renderMode: 'canvas' },
+      config: { visible: true, visibleIndicatorIds: undefined },
     })
 
     wrapper.unmount()
@@ -230,7 +230,7 @@ describe('KLineChart legend slot lifecycle', () => {
     expect(wrapper.get('.legend-contract').text()).toBe(JSON.stringify(context))
     expect(mockController.rendererConfigCalls().at(-1)).toEqual({
       name: 'mainIndicatorLegend',
-      config: { renderMode: 'external' },
+      config: { visible: false, visibleIndicatorIds: undefined },
     })
 
     wrapper.unmount()

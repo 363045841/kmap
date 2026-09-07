@@ -9,7 +9,11 @@ import {
   type ChartController,
   type DrawingToolId,
 } from '@363045841yyt/klinechart-core/controllers'
-import { type DrawingObject, type DrawingStyle } from '@363045841yyt/klinechart-core/plugin'
+import {
+  type DrawingLabelPosition,
+  type DrawingObject,
+  type DrawingStyle,
+} from '@363045841yyt/klinechart-core/plugin'
 import { computed, shallowRef, onUnmounted, type Ref } from 'vue'
 
 export function useDrawingManager(ctrl: Ref<ChartController | null>) {
@@ -47,6 +51,7 @@ export function useDrawingManager(ctrl: Ref<ChartController | null>) {
     targetKind: 'line' | 'area',
     targetIndex: number,
     label: string,
+    position: DrawingLabelPosition,
   ) {
     const drawing = drawings.value.find((item) => item.id === drawingId)
     if (!drawing) return
@@ -57,7 +62,7 @@ export function useDrawingManager(ctrl: Ref<ChartController | null>) {
     const target = targetKind === 'line' ? labels.line : labels.area
     const key = String(targetIndex)
     if (label.trim() === '') delete target[key]
-    else target[key] = label
+    else target[key] = { text: label, position }
     ctrl.value?.updateDrawing({ ...drawing, labels })
   }
 

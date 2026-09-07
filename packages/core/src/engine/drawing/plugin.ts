@@ -1,4 +1,4 @@
-/** 绘图主层：只消费帧投影并绘制 primitive。 */
+/** 绘图层：只消费帧投影并绘制 primitive。 */
 import type { RendererPlugin, RenderContext, DrawingPrimitive } from '../../foundation/plugin/index'
 
 import { createDefaultPrimitiveRendererSet, type PrimitiveRendererSet } from '.'
@@ -39,7 +39,9 @@ export function createDrawingRendererPlugin(options: {
       if (!projection || projection.primitives.length === 0) return
       const viewport = context.viewport
       renderPrimitives(
-        context.ctx,
+        // GPU K 线在帧末才提交，主画布上的 2D 图形会被其覆盖。
+        // 绘图输出到独立 overlay canvas，保持在所有行情图元之上。
+        context.overlayCtx ?? context.ctx,
         projection.primitives,
         renderers,
         { left: 0, top: 0, right: viewport.plotWidth, bottom: context.pane.height },

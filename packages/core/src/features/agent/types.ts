@@ -59,8 +59,8 @@ export interface ChartAgentDrawingAnchor {
 
 /** Agent 可读写的绘图附属文本完整快照。 */
 export interface ChartAgentDrawingLabels {
-  readonly line: Readonly<Record<string, string>>
-  readonly area: Readonly<Record<string, string>>
+  readonly line: Readonly<Record<string, import('../../foundation/plugin').DrawingLabel>>
+  readonly area: Readonly<Record<string, import('../../foundation/plugin').DrawingLabel>>
 }
 
 /** Agent 可读取的已确认图元快照。 */

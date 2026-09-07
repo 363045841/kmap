@@ -45,6 +45,7 @@ export interface LineLabelTarget {
   /** 文字沿线段方向旋转的可读角度（弧度）。 */
   readonly rotation: number
   readonly text: string
+  readonly position: import('../../foundation/plugin').DrawingLabelPosition
 }
 
 /**
@@ -290,8 +291,10 @@ export class HitTester {
     for (const drawing of drawings) {
       const segments = this.getDrawingLabelSegments(drawing, adapter)
       for (const [lineIndex, segment] of segments.entries()) {
-        const x = (segment.a.x + segment.b.x) / 2
-        const y = (segment.a.y + segment.b.y) / 2
+        const label = drawing.labels?.line[String(lineIndex)]
+        const ratio = label?.position === 'start' ? 0 : label?.position === 'end' ? 1 : 0.5
+        const x = segment.a.x + (segment.b.x - segment.a.x) * ratio
+        const y = segment.a.y + (segment.b.y - segment.a.y) * ratio
         const dx = mouseX - x
         const dy = mouseY - y
         const distanceSq = dx * dx + dy * dy
@@ -307,7 +310,8 @@ export class HitTester {
           x,
           y: y + (adapter.getPaneInfo(drawing.paneId)?.top ?? 0),
           rotation,
-          text: drawing.labels?.line[String(lineIndex)] ?? '',
+          text: label?.text ?? '',
+          position: label?.position ?? 'center',
         }
       }
     }
@@ -353,7 +357,8 @@ export class HitTester {
         x,
         y: y + (adapter.getPaneInfo(drawing.paneId)?.top ?? 0),
         rotation: 0,
-        text: drawing.labels?.area['0'] ?? '',
+        text: drawing.labels?.area['0']?.text ?? '',
+        position: drawing.labels?.area['0']?.position ?? 'center',
       }
     }
     return null

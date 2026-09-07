@@ -89,7 +89,8 @@ describe('projectDrawingsForFrame', () => {
         { id: 'a', time: 1_000, price: 10 },
         { id: 'b', time: 2_000, price: 20 },
       ],
-      labels: { line: { 0: '趋势' }, area: {} },
+      labels: { line: { 0: { text: '趋势', position: 'start' } }, area: {} },
+      params: {},
       style: { stroke: '#2962ff' },
     }
     const store = new DrawingStore({
@@ -104,7 +105,7 @@ describe('projectDrawingsForFrame', () => {
     expect(projection.primitives).toEqual([
       expect.objectContaining({
         kind: 'line',
-        text: expect.objectContaining({ text: '趋势' }),
+        text: expect.objectContaining({ text: '趋势', position: 'start' }),
       }),
     ])
   })
@@ -119,7 +120,8 @@ describe('projectDrawingsForFrame', () => {
         { id: 'a', time: 1_000, price: 10 },
         { id: 'b', time: 2_000, price: 20 },
       ],
-      labels: { line: { 0: '箭头' }, area: {} },
+      labels: { line: { 0: { text: '箭头', position: 'end' } }, area: {} },
+      params: {},
       style: { stroke: '#2962ff' },
     }
     const store = new DrawingStore({
@@ -130,7 +132,10 @@ describe('projectDrawingsForFrame', () => {
     registerDefaultDrawingDefinitions(definitions)
 
     expect(projectDrawingsForFrame(store, definitions, createContext()).primitives).toEqual([
-      expect.objectContaining({ kind: 'arrow', text: expect.objectContaining({ text: '箭头' }) }),
+      expect.objectContaining({
+        kind: 'arrow',
+        text: expect.objectContaining({ text: '箭头', position: 'end' }),
+      }),
     ])
   })
 

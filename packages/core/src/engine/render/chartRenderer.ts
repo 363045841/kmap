@@ -193,7 +193,6 @@ export class ChartRenderer {
   readonly markerManager: MarkerManager
   readonly drawingStore: DrawingStore
   private readonly drawingDefinitions = new DrawingDefinitionRegistry()
-  private overlayHadCrosshair = false
   private xAxisCtx: CanvasRenderingContext2D | null = null
 
   private cachedDrawFrame: {
@@ -535,8 +534,6 @@ export class ChartRenderer {
     const mainIndicatorRange = useCachedFrame
       ? null
       : this.deps.getIndicatorManager().indicatorSchedulerAccessor.getMainIndicatorPriceRange()
-    const hasCrosshair = this.deps.getInteraction().getCrosshairIndex() !== null
-
     const renderData = frame.data
 
     // 遍历所有 pane，清 canvas → 构建 RenderContext → scene.paintPane
@@ -547,14 +544,12 @@ export class ChartRenderer {
       kLineCenters,
       kBarRects,
       mainIndicatorRange,
-      hasCrosshair,
       useCachedFrame,
       level,
       renderData,
       fiveDayTimeShareGeometry,
     )
 
-    this.overlayHadCrosshair = hasCrosshair
     // 画底部时间轴（独立 layer，不进 scene）
     this.renderXAxis(
       vp,
@@ -790,7 +785,6 @@ export class ChartRenderer {
     kLineCenters: number[],
     kBarRects: Array<{ x: number; width: number }>,
     mainIndicatorRange: { min: number; max: number } | null,
-    hasCrosshair: boolean,
     useCachedFrame: boolean,
     level: UpdateLevel,
     renderData: MarketSeriesData[],
@@ -805,14 +799,14 @@ export class ChartRenderer {
     const dataManager = this.deps.getDataManager()
     const mode = this.deps.getActiveMode()
 
-    // main canvas 只画非 overlay 角色；overlay canvas 只画 overlay 角色
+    // 绘图虽然保留 drawing 语义角色，但输出到 overlay canvas，以保证位于 GPU 行情图元之上。
     const MAIN_CANVAS_ROLES: readonly LayerRole[] = [
       'background',
       'primary',
       'indicator',
       'component',
-      'drawing',
     ]
+    const OVERLAY_CANVAS_ROLES: readonly LayerRole[] = ['drawing', 'overlay']
 
     // 遍历主图 pane 和所有子图 pane，每个 pane 有一组独立 canvas 以及对应更新级别（main/overlay/yAxis）
     for (const renderer of this.deps.getPaneRenderers()) {
@@ -887,10 +881,9 @@ export class ChartRenderer {
 
       // 根据 UpdateLevel 决定清哪些 canvas
       const shouldUpdateMain = level === UpdateLevel.Main || level === UpdateLevel.All
-      // Overlay 单独重绘：有十字线才画；overlayHadCrosshair 保证十字线消失时最后清一次
-      const shouldUpdateOverlay =
-        level === UpdateLevel.All ||
-        (level === UpdateLevel.Overlay && (hasCrosshair || this.overlayHadCrosshair))
+      // 绘图与十字线共享 overlay canvas。绘图交互仅请求 Overlay 更新，必须每次重画，
+      // 否则预览只会在触发主层重绘时出现；主层变化时也要刷新其投影。
+      const shouldUpdateOverlay = true
 
       // 清 main canvas
       if (shouldUpdateMain && mainCtx) {
@@ -1037,7 +1030,7 @@ export class ChartRenderer {
           MAIN_CANVAS_ROLES,
         )
       }
-      // 画 overlay canvas（仅 overlay 角色 layer）；All 级也画
+      // 画 overlay canvas（绘图和动态 overlay 角色 layer）
       if (shouldUpdateOverlay) {
         // GPU 主层在本帧已经清过；overlay 不得清除其可见 GPU 内容。
         sceneRenderer.beginFrame(region, { clear: false })
@@ -1050,7 +1043,7 @@ export class ChartRenderer {
             frameNumber: this.frameCount++,
             deltaMs: 0,
           },
-          ['overlay'],
+          OVERLAY_CANVAS_ROLES,
         )
       }
     }

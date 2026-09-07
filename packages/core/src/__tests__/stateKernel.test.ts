@@ -182,11 +182,12 @@ describe('viewportState template', () => {
 
     // kGap 由 kGapFromKWidth(6,2)=1.5 自动推导。宽度取奇 11px，间隙 3px（物理）。
     expect((module.readonly as any).contentWidth()).toBe(481.5)
-    expect((module.readonly as any).maxScrollLeft()).toBe(281.5)
+    // 允许尾部空槽，但最大位置仍保留最后一根 K 线的至少一个物理像素。
+    expect((module.readonly as any).maxScrollLeft()).toBe(269.5)
 
     dataLength$.set(20)
     expect((module.readonly as any).contentWidth()).toBe(551.5)
-    expect((module.readonly as any).maxScrollLeft()).toBe(351.5)
+    expect((module.readonly as any).maxScrollLeft()).toBe(339.5)
 
     module.actions.resize(300, 150, 2)
     expect((module.readonly as any).contentWidth()).toBe(651.5)
@@ -194,7 +195,7 @@ describe('viewportState template', () => {
 
     options$.set({ bottomAxisHeight: 30, kWidth: 10, kGap: 2 })
     expect((module.readonly as any).contentWidth()).toBe(851.5)
-    expect((module.readonly as any).maxScrollLeft()).toBe(551.5)
+    expect((module.readonly as any).maxScrollLeft()).toBe(519.5)
 
     period$.set('timeshare')
     expect((module.readonly as any).contentWidth()).toBe(300)

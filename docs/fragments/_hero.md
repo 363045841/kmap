@@ -16,4 +16,6 @@ A lightweight financial K-line charting library focused on quantitative trading 
   <br/>
   <img src="https://files.seeusercontent.com/2026/08/30/7qBr/pasted-image-1788102379488.webp" width="400" style="border-radius: 12px; margin: 8px;" />
   <img src="https://files.seeusercontent.com/2026/06/20/0flS/1YHDQQB321JZ5QW.png" width="400" style="border-radius: 12px; margin: 8px;" />
+  <br/>
+  <img src="https://files.seeusercontent.com/2026/09/07/W2vc/pasted-image-1788795785458.webp" width="400" style="border-radius: 12px; margin: 8px;" />
 </div>
