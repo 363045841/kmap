@@ -54,6 +54,7 @@ export function createWebGLRenderer(surface: SurfaceBackend, gl: SharedWebGLSurf
   let disposed = false
   let candleSurface: CandleWebGLSurface | null = null
   let lineSurface: LineWebGLSurface | null = null
+  let frameOpen = false
 
   const candle = new CandleWebGLSurface(gl)
   if (candle.isAvailable()) candleSurface = candle
@@ -166,19 +167,21 @@ export function createWebGLRenderer(surface: SurfaceBackend, gl: SharedWebGLSurf
       // no-op: WebGL has no compute pipelines
     },
 
-    beginFrame(region: SurfaceRegion): void {
+    beginFrame(region: SurfaceRegion, options?: { clear?: boolean }): void {
       if (disposed) return
+      if (!frameOpen) {
+        if (!gl.beginFrame({ clear: options?.clear !== false })) return
+        frameOpen = true
+      }
       currentRegion = { ...region }
       surface.bindRegion(region)
       if (candleSurface) {
         candleSurface.setRegion(toWebGLRegion(region))
         candleSurface.resize(region.width, region.height, region.dpr)
-        candleSurface.clear()
       }
       if (lineSurface) {
         lineSurface.setRegion(toWebGLRegion(region))
         lineSurface.resize(region.width, region.height, region.dpr)
-        lineSurface.clear()
       }
     },
 
@@ -281,12 +284,16 @@ export function createWebGLRenderer(surface: SurfaceBackend, gl: SharedWebGLSurf
     },
 
     endFrame(): void {
-      // no-op per-frame cleanup; surfaces hold region reference until next frame
+      if (!frameOpen) return
+      gl.endFrame()
+      frameOpen = false
     },
 
     dispose(): void {
       if (disposed) return
       disposed = true
+      if (frameOpen) gl.endFrame()
+      frameOpen = false
       disposeSurfaces()
       surface.dispose()
     },

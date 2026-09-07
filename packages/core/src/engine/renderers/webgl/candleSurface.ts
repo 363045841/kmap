@@ -1,7 +1,5 @@
 import {
   SharedWebGLSurface,
-  type PhysicalRegion,
-  type WebGLCompositeOptions,
   type WebGLRegion,
 } from './sharedWebGLSurface'
 
@@ -34,6 +32,7 @@ type RectWebGLHandles = {
   unitBuffer: WebGLBuffer
   rectBuffer: WebGLBuffer
   resolutionLocation: WebGLUniformLocation
+  dprLocation: WebGLUniformLocation
   scrollXLocation: WebGLUniformLocation
   colorLocation: WebGLUniformLocation
 }
@@ -43,22 +42,13 @@ type BasicLineWebGLHandles = {
   vao: WebGLVertexArrayObject
   vertexBuffer: WebGLBuffer
   resolutionLocation: WebGLUniformLocation
+  dprLocation: WebGLUniformLocation
   scrollXLocation: WebGLUniformLocation
   colorLocation: WebGLUniformLocation
 }
 
 type LineWebGLHandles = {
   basic: BasicLineWebGLHandles
-}
-
-type MsaaTargets = {
-  samples: number
-  widthPx: number
-  heightPx: number
-  msaaFramebuffer: WebGLFramebuffer
-  msaaColorRenderbuffer: WebGLRenderbuffer
-  resolveFramebuffer: WebGLFramebuffer
-  resolveTexture: WebGLTexture
 }
 
 const RECT_VERTEX_SHADER_SOURCE = `#version 300 es
@@ -68,12 +58,17 @@ in vec2 a_unit;
 in vec4 a_rect;
 
 uniform vec2 u_resolution;
+uniform float u_dpr;
 uniform float u_scrollX;
 
 void main() {
+    float left = round((a_rect.x - u_scrollX) * u_dpr);
+    float top = round(a_rect.y * u_dpr);
+    float right = round((a_rect.x + a_rect.z - u_scrollX) * u_dpr);
+    float bottom = round((a_rect.y + a_rect.w) * u_dpr);
     vec2 position = vec2(
-        a_rect.x - u_scrollX + a_unit.x * a_rect.z,
-        a_rect.y + a_unit.y * a_rect.w
+        left + a_unit.x * max(1.0, right - left),
+        top + a_unit.y * max(1.0, bottom - top)
     );
 
     vec2 zeroToOne = position / u_resolution;
@@ -91,10 +86,14 @@ precision highp float;
 in vec2 a_position;
 
 uniform vec2 u_resolution;
+uniform float u_dpr;
 uniform float u_scrollX;
 
 void main() {
-    vec2 position = vec2(a_position.x - u_scrollX, a_position.y);
+    vec2 position = vec2(
+        (a_position.x - u_scrollX) * u_dpr,
+        a_position.y * u_dpr
+    );
     vec2 zeroToOne = position / u_resolution;
     vec2 clip = vec2(
         zeroToOne.x * 2.0 - 1.0,
@@ -151,16 +150,6 @@ export class CandleWebGLSurface {
     this.logicalHeight = height
   }
 
-  clear(): void {
-    if (!this.region || this.logicalWidth <= 0 || this.logicalHeight <= 0) return
-    this.shared.clearRegion(this.region)
-  }
-
-  compositeTo(ctx: CanvasRenderingContext2D, options: WebGLCompositeOptions = {}): void {
-    if (!this.region) return
-    this.shared.compositeRegionTo(ctx, this.region, options)
-  }
-
   /** 直接传入已打包的 Float32Array：每 4 个元素为一组 (x, y, width, height) */
   drawRectBuffer(
     rectData: Float32Array,
@@ -179,6 +168,8 @@ export class CandleWebGLSurface {
     const floatCount = rectCount * 4
     const gl = this.shared.getGL()
     if (!gl || !this.region || !this.shared.bindRegion(this.region)) return false
+    const physical = this.shared.getPhysicalRegion(this.region)
+    if (!physical) return false
 
     gl.useProgram(handles.program)
     gl.bindVertexArray(handles.vao)
@@ -199,7 +190,8 @@ export class CandleWebGLSurface {
     } else {
       gl.enable(gl.BLEND)
     }
-    gl.uniform2f(handles.resolutionLocation, this.logicalWidth, this.logicalHeight)
+    gl.uniform2f(handles.resolutionLocation, physical.widthPx, physical.heightPx)
+    gl.uniform1f(handles.dprLocation, this.region.dpr)
     gl.uniform1f(handles.scrollXLocation, scrollLeft)
     gl.uniform4f(handles.colorLocation, colorValue[0], colorValue[1], colorValue[2], colorValue[3])
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, rectCount)
@@ -280,9 +272,10 @@ export class CandleWebGLSurface {
     }
 
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution')
+    const dprLocation = gl.getUniformLocation(program, 'u_dpr')
     const scrollXLocation = gl.getUniformLocation(program, 'u_scrollX')
     const colorLocation = gl.getUniformLocation(program, 'u_color')
-    if (!resolutionLocation || !scrollXLocation || !colorLocation) {
+    if (!resolutionLocation || !dprLocation || !scrollXLocation || !colorLocation) {
       gl.deleteBuffer(unitBuffer)
       gl.deleteBuffer(rectBuffer)
       gl.deleteVertexArray(vao)
@@ -322,6 +315,7 @@ export class CandleWebGLSurface {
       unitBuffer,
       rectBuffer,
       resolutionLocation,
+      dprLocation,
       scrollXLocation,
       colorLocation,
     }
@@ -339,7 +333,6 @@ export class LineWebGLSurface {
   private fillScratch = new Float32Array(0)
   private lineScratch = new Float32Array(0)
   private region: WebGLRegion | null = null
-  private msaaTargets: MsaaTargets | null = null
 
   // Geometry cache: 以 points 数组引用 + halfWidth 为 key，避免每帧重算法线/miter
   private geoCache = new WeakMap<
@@ -369,16 +362,6 @@ export class LineWebGLSurface {
     this.logicalWidth = width
     this.logicalHeight = height
     this.dpr = dpr
-  }
-
-  clear(): void {
-    if (!this.region || this.logicalWidth <= 0 || this.logicalHeight <= 0) return
-    this.shared.clearRegion(this.region)
-  }
-
-  compositeTo(ctx: CanvasRenderingContext2D, options: WebGLCompositeOptions = {}): void {
-    if (!this.region) return
-    this.shared.compositeRegionTo(ctx, this.region, options)
   }
 
   drawLineStrips(lines: ColoredLineStrip[], scrollLeft: number): boolean {
@@ -455,10 +438,11 @@ export class LineWebGLSurface {
       }
     }
 
-    const msaaRender = this.beginMsaaRender(gl, region)
-    if (!msaaRender && !this.shared.bindRegion(region)) {
+    if (!this.shared.bindRegion(region)) {
       return false
     }
+    const physical = this.shared.getPhysicalRegion(region)
+    if (!physical) return false
 
     gl.useProgram(handles.basic.program)
     gl.bindVertexArray(handles.basic.vao)
@@ -474,7 +458,8 @@ export class LineWebGLSurface {
     }
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.lineScratch.subarray(0, totalFloats))
 
-    gl.uniform2f(handles.basic.resolutionLocation, this.logicalWidth, this.logicalHeight)
+    gl.uniform2f(handles.basic.resolutionLocation, physical.widthPx, physical.heightPx)
+    gl.uniform1f(handles.basic.dprLocation, region.dpr)
     gl.uniform1f(handles.basic.scrollXLocation, scrollLeft)
     if (hasNativeLines) {
       gl.lineWidth(1)
@@ -493,11 +478,6 @@ export class LineWebGLSurface {
 
     gl.bindVertexArray(null)
 
-    if (msaaRender) {
-      this.resolveMsaaToSharedRegion(gl, msaaRender.targets, msaaRender.physical)
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     return true
   }
 
@@ -547,8 +527,9 @@ export class LineWebGLSurface {
     const region = this.region
     if (!gl || !region) return false
 
-    const msaaRender = this.beginMsaaRender(gl, region)
-    if (!msaaRender && !this.shared.bindRegion(region)) return false
+    if (!this.shared.bindRegion(region)) return false
+    const physical = this.shared.getPhysicalRegion(region)
+    if (!physical) return false
 
     gl.useProgram(handles.basic.program)
     gl.bindVertexArray(handles.basic.vao)
@@ -564,7 +545,8 @@ export class LineWebGLSurface {
     }
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.fillScratch.subarray(0, floatCount))
 
-    gl.uniform2f(handles.basic.resolutionLocation, this.logicalWidth, this.logicalHeight)
+    gl.uniform2f(handles.basic.resolutionLocation, physical.widthPx, physical.heightPx)
+    gl.uniform1f(handles.basic.dprLocation, region.dpr)
     gl.uniform1f(handles.basic.scrollXLocation, scrollLeft)
     gl.uniform4f(
       handles.basic.colorLocation,
@@ -576,20 +558,12 @@ export class LineWebGLSurface {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertexCount)
     gl.bindVertexArray(null)
 
-    if (msaaRender) {
-      this.resolveMsaaToSharedRegion(gl, msaaRender.targets, msaaRender.physical)
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     return true
   }
 
   destroy(): void {
     const handles = this.handles
     const gl = this.shared.getGL()
-    if (gl) {
-      this.destroyMsaaTargets(gl)
-    }
     if (!handles) {
       this.vertexCapacity = 0
       return
@@ -604,176 +578,6 @@ export class LineWebGLSurface {
     this.handles = null
     this.available = false
     this.vertexCapacity = 0
-  }
-
-  private beginMsaaRender(
-    gl: WebGL2RenderingContext,
-    region: WebGLRegion,
-  ): { targets: MsaaTargets; physical: PhysicalRegion } | null {
-    const physical = this.shared.getPhysicalRegion(region)
-    const targets = physical ? this.ensureMsaaTargets(gl, physical) : null
-    if (!physical || !targets) return null
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, targets.msaaFramebuffer)
-    gl.viewport(0, 0, targets.widthPx, targets.heightPx)
-    gl.disable(gl.SCISSOR_TEST)
-    gl.clearColor(0, 0, 0, 0)
-    gl.clear(gl.COLOR_BUFFER_BIT)
-    return { targets, physical }
-  }
-
-  private ensureMsaaTargets(
-    gl: WebGL2RenderingContext,
-    physical: PhysicalRegion,
-  ): MsaaTargets | null {
-    const preferredSamples = 4
-    const maxSamples = Number(gl.getParameter(gl.MAX_SAMPLES)) || 0
-    const samples = Math.max(1, Math.min(preferredSamples, maxSamples))
-    if (samples <= 1) return null
-
-    const existing = this.msaaTargets
-    if (
-      existing &&
-      existing.widthPx === physical.widthPx &&
-      existing.heightPx === physical.heightPx &&
-      existing.samples === samples
-    ) {
-      return existing
-    }
-
-    this.destroyMsaaTargets(gl)
-
-    const msaaFramebuffer = gl.createFramebuffer()
-    const msaaColorRenderbuffer = gl.createRenderbuffer()
-    const resolveFramebuffer = gl.createFramebuffer()
-    const resolveTexture = gl.createTexture()
-    if (!msaaFramebuffer || !msaaColorRenderbuffer || !resolveFramebuffer || !resolveTexture) {
-      if (msaaFramebuffer) gl.deleteFramebuffer(msaaFramebuffer)
-      if (msaaColorRenderbuffer) gl.deleteRenderbuffer(msaaColorRenderbuffer)
-      if (resolveFramebuffer) gl.deleteFramebuffer(resolveFramebuffer)
-      if (resolveTexture) gl.deleteTexture(resolveTexture)
-      return null
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFramebuffer)
-    gl.bindRenderbuffer(gl.RENDERBUFFER, msaaColorRenderbuffer)
-    gl.renderbufferStorageMultisample(
-      gl.RENDERBUFFER,
-      samples,
-      gl.RGBA8,
-      physical.widthPx,
-      physical.heightPx,
-    )
-    gl.framebufferRenderbuffer(
-      gl.FRAMEBUFFER,
-      gl.COLOR_ATTACHMENT0,
-      gl.RENDERBUFFER,
-      msaaColorRenderbuffer,
-    )
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      gl.bindRenderbuffer(gl.RENDERBUFFER, null)
-      gl.deleteFramebuffer(msaaFramebuffer)
-      gl.deleteRenderbuffer(msaaColorRenderbuffer)
-      gl.deleteFramebuffer(resolveFramebuffer)
-      gl.deleteTexture(resolveTexture)
-      return null
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, resolveFramebuffer)
-    gl.bindTexture(gl.TEXTURE_2D, resolveTexture)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      physical.widthPx,
-      physical.heightPx,
-      0,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      null,
-    )
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, resolveTexture, 0)
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      gl.bindTexture(gl.TEXTURE_2D, null)
-      gl.bindRenderbuffer(gl.RENDERBUFFER, null)
-      gl.deleteFramebuffer(msaaFramebuffer)
-      gl.deleteRenderbuffer(msaaColorRenderbuffer)
-      gl.deleteFramebuffer(resolveFramebuffer)
-      gl.deleteTexture(resolveTexture)
-      return null
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    gl.bindTexture(gl.TEXTURE_2D, null)
-    gl.bindRenderbuffer(gl.RENDERBUFFER, null)
-
-    const targets = {
-      samples,
-      widthPx: physical.widthPx,
-      heightPx: physical.heightPx,
-      msaaFramebuffer,
-      msaaColorRenderbuffer,
-      resolveFramebuffer,
-      resolveTexture,
-    }
-    this.msaaTargets = targets
-    return targets
-  }
-
-  private destroyMsaaTargets(gl: WebGL2RenderingContext): void {
-    const targets = this.msaaTargets
-    if (!targets) return
-    gl.deleteFramebuffer(targets.msaaFramebuffer)
-    gl.deleteRenderbuffer(targets.msaaColorRenderbuffer)
-    gl.deleteFramebuffer(targets.resolveFramebuffer)
-    gl.deleteTexture(targets.resolveTexture)
-    this.msaaTargets = null
-  }
-
-  private resolveMsaaToSharedRegion(
-    gl: WebGL2RenderingContext,
-    targets: MsaaTargets,
-    physical: PhysicalRegion,
-  ): void {
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, targets.msaaFramebuffer)
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, targets.resolveFramebuffer)
-    gl.blitFramebuffer(
-      0,
-      0,
-      targets.widthPx,
-      targets.heightPx,
-      0,
-      0,
-      targets.widthPx,
-      targets.heightPx,
-      gl.COLOR_BUFFER_BIT,
-      gl.NEAREST,
-    )
-
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, targets.resolveFramebuffer)
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
-    const destY = this.shared.getCanvas().height - physical.sourceY - physical.heightPx
-    gl.disable(gl.SCISSOR_TEST)
-    gl.blitFramebuffer(
-      0,
-      0,
-      targets.widthPx,
-      targets.heightPx,
-      physical.sourceX,
-      destY,
-      physical.sourceX + physical.widthPx,
-      destY + physical.heightPx,
-      gl.COLOR_BUFFER_BIT,
-      gl.NEAREST,
-    )
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null)
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
   }
 
   private initLineHandles(): LineWebGLHandles | null {
@@ -803,9 +607,10 @@ export class LineWebGLSurface {
     }
 
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution')
+    const dprLocation = gl.getUniformLocation(program, 'u_dpr')
     const scrollXLocation = gl.getUniformLocation(program, 'u_scrollX')
     const colorLocation = gl.getUniformLocation(program, 'u_color')
-    if (!resolutionLocation || !scrollXLocation || !colorLocation) {
+    if (!resolutionLocation || !dprLocation || !scrollXLocation || !colorLocation) {
       gl.deleteBuffer(vertexBuffer)
       gl.deleteVertexArray(vao)
       gl.deleteProgram(program)
@@ -835,6 +640,7 @@ export class LineWebGLSurface {
         vao,
         vertexBuffer,
         resolutionLocation,
+        dprLocation,
         scrollXLocation,
         colorLocation,
       },

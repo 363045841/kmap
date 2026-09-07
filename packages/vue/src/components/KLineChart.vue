@@ -84,7 +84,6 @@
             ref="containerRef"
             class="chart-container"
             :style="chartContainerStyle"
-            @scroll.passive="onScroll"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
@@ -1541,10 +1540,6 @@
 
   function onRightAxisPointerLeave(e: PointerEvent) {
     controller.value?.handlePointerEvent(e)
-  }
-
-  function onScroll() {
-    controller.value?.handleScrollEvent()
   }
 
   // ── Tooltip Drag ──

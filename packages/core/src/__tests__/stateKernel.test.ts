@@ -206,6 +206,8 @@ describe('viewportState template', () => {
     const dataLength$ = createSignal(10)
     let scrollLeft = 0
     const container = {
+      clientWidth: 100,
+      clientHeight: 100,
       get scrollLeft() {
         return scrollLeft
       },
@@ -226,7 +228,8 @@ describe('viewportState template', () => {
     })
     module.actions.resize(100, 100, 1)
     module.actions.init()
-    module.actions.scrollTo(10_000)
+    expect(module.actions.scrollTo(10_000)).toBe(true)
+    expect(module.actions.scrollTo(10_000)).toBe(false)
     expect(module.readonly.scrollLeft()).toBe((module.readonly as any).maxScrollLeft())
 
     scrollLeft = 10_000
@@ -239,10 +242,9 @@ describe('viewportState template', () => {
     module.actions.scrollTo(10_000)
     dataLength$.set(1)
     expect(module.readonly.scrollLeft()).toBe((module.readonly as any).maxScrollLeft())
-    expect(container.scrollLeft).toBe(module.readonly.scrollLeft())
   })
 
-  it('writes derived content width before the derived scroll position', async () => {
+  it('synchronizes derived content width without writing scroll position', async () => {
     const { createViewportState } = await import('../engine/state/viewportState')
     const writes: string[] = []
     let scrollLeft = 0
@@ -254,6 +256,8 @@ describe('viewportState template', () => {
       },
     } as unknown as HTMLElement
     const container = {
+      clientWidth: 100,
+      clientHeight: 100,
       get scrollLeft() {
         return scrollLeft
       },
@@ -276,7 +280,7 @@ describe('viewportState template', () => {
     module.actions.resize(100, 100, 1)
     module.actions.init()
 
-    expect(writes).toEqual([`width:${(module.readonly as any).contentWidth()}px`, `scroll:${module.readonly.scrollLeft()}`])
+    expect(writes).toEqual([`width:${(module.readonly as any).contentWidth()}px`])
   })
 
   it('resize batches dimension writes into one notification', async () => {

@@ -34,6 +34,7 @@ import {
 } from '../drawing'
 import { projectDrawingsForFrame } from '../drawing/frameProjection'
 import { createDrawingRendererPlugin } from '../drawing/plugin'
+import type { DrawingSelectionMarquee } from '../drawing/selectionMarquee'
 import { ChartIndicatorManager } from '../indicators/chartIndicatorManager'
 import { resolveStateKey } from '../indicators/indicatorMetadata'
 import { UpdateLevel } from '../layout/pane'
@@ -90,6 +91,8 @@ type FrameContext = {
   vp: Viewport
   /** 可见 K 线起止索引 */
   range: VisibleRange
+  /** 含左右扩窗的可见区间，仅用于数据缺口检测。 */
+  rawRange: VisibleRange
   /** 每根 K 线在大图上的 x 坐标 */
   kLinePositions: KLinePositions
   /** 每根 K 线中心的 x 坐标（由物理像素回算逻辑值） */
@@ -135,6 +138,7 @@ export function mergeUpdateLevel(current: UpdateLevel, next: UpdateLevel): Updat
   return next
 }
 
+/** 在绘制帧内提交 viewport 的原生滚动位置，跳过无变化写入。 */
 export interface RendererDependencies {
   getDom: () => ChartDom
   getOption: () => ResolvedChartOptions
@@ -151,6 +155,8 @@ export interface RendererDependencies {
   options: OptionsStateModule
   /** scroll / dpr / plot 几何 SSOT */
   viewport: ViewportStateModule
+  /** 由 Chart 的 ViewportScrollBridge 在 render frame 内提交原生滚动。 */
+  commitViewportScroll: (targetScrollLeft: number) => void
   getDataManager: () => ChartDataManager
   getIndicatorManager: () => ChartIndicatorManager
   getActiveMode: () => ChartModeHandler
@@ -160,6 +166,8 @@ export interface RendererDependencies {
   drawings$: DrawingStoreDeps['drawings$']
   selectedDrawingIds$: DrawingStoreDeps['selectedDrawingIds$']
   getOverlay?: DrawingStoreDeps['getOverlay']
+  /** 绘图交互会话中的临时框选，不进入持久化图元列表。 */
+  getSelectionMarquee?: () => DrawingSelectionMarquee | null
   /** 主图图例上下文发布（canvas / external 均触发；draw 内回调） */
   onLegendContext?: (
     ctx: import('../renderers/Indicator/mainIndicatorLegendContext').LegendTemplateContext | null,
@@ -232,6 +240,13 @@ export class ChartRenderer {
       render: (snapshot) => {
         // generation 0 占位不绘制
         if (snapshot.generation === 0) return
+        // DOM scroll 与 canvas 绘制必须由同一帧事务提交，避免两个 rAF 产生视觉错位。
+        this.commitViewportScroll()
+        if (snapshot.frame && !snapshot.frame.useCachedFrame) {
+          this.deps
+            .getIndicatorManager()
+            .indicatorSchedulerAccessor.updateVisibleRangeForFrame(snapshot.frame.range)
+        }
         // 把本帧 K 线信息(kLinePositions,range,kWidthPx,kLineCenters)写入 InteractionController，保证 hover 命中与本帧一致
         if (snapshot.frame) {
           this.sealFrameGeometry(snapshot.frame)
@@ -240,6 +255,10 @@ export class ChartRenderer {
         this.deps.getInteraction().flushPendingHover()
         // 绘制：清 canvas → 构建 RenderContext → 遍历 pane 调 scene.paintPane → endFrame（GPU 一次性 submit 所有 pane）→ 时间轴
         this.drawWithFrame(snapshot.level, snapshot.frame)
+        if (snapshot.frame) {
+          this.cacheDrawFrame(snapshot.frame)
+          this.checkVisibleRangeGapAfterRender(snapshot.frame)
+        }
       },
       schedule: (run) => {
         this.raf = requestAnimationFrame(() => {
@@ -472,6 +491,11 @@ export class ChartRenderer {
       )
   }
 
+  /** 将最新 viewport 位置同步到原生滚动容器，作为绘制帧的第一项 DOM 副作用。 */
+  private commitViewportScroll(): void {
+    this.deps.commitViewportScroll(this.deps.viewport.readonly.scrollLeft.peek())
+  }
+
   /** 将 prepareFrameData 的帧几何按 level 画到 canvas，含所有 pane 的 main/overlay/yAxis 及时间轴 */
   private drawWithFrame(level: UpdateLevel, frame: FrameContext | null): void {
     this.markerManager.clear()
@@ -579,17 +603,6 @@ export class ChartRenderer {
 
     const dataManager = this.deps.getDataManager()
     const mode = this.deps.getActiveMode()
-    if (
-      !useCachedFrame &&
-      (!this._prevFrameRange ||
-        range.start !== this._prevFrameRange.visible.start ||
-        range.end !== this._prevFrameRange.visible.end ||
-        rawRange.start !== this._prevFrameRange.raw.start ||
-        rawRange.end !== this._prevFrameRange.raw.end)
-    ) {
-      this._prevFrameRange = { visible: range, raw: rawRange }
-      this.checkVisibleRangeGapWhenIdle()
-    }
 
     let kLinePositions: KLinePositions
     let kLineCenters: number[]
@@ -691,20 +704,12 @@ export class ChartRenderer {
       } else {
         kWidthPx = getPhysicalKLineConfig(opt.kWidth, opt.kGap, vp.dpr).kWidthPx
       }
-      this.cachedDrawFrame = {
-        viewport: { ...vp },
-        range: { ...range },
-        kLinePositions,
-        kLineCenters,
-        kBarRects,
-        kWidthPx,
-        fiveDayTimeShareGeometry,
-      }
     }
 
     return {
       vp,
       range,
+      rawRange,
       kLinePositions,
       kLineCenters,
       kBarRects,
@@ -764,9 +769,9 @@ export class ChartRenderer {
       const xH = xCtx.canvas.height
       xCtx.clearRect(0, 0, xW, xH)
     }
-    // M2 hybrid：可见 WebGPU canvas 不经 2D clearRect，需显式 transparent clear
+    // 可见 GPU canvas 不经 2D clearRect，需显式 transparent clear
     const scene = this.deps.getSceneRenderer()
-    if (scene.caps.name === 'webgpu') {
+    if (scene.caps.name !== 'canvas2d') {
       scene.surface.clearRegion({
         x: 0,
         y: 0,
@@ -984,6 +989,7 @@ export class ChartRenderer {
         this.drawingStore,
         this.drawingDefinitions,
         context,
+        this.deps.getSelectionMarquee?.() ?? null,
       )
       context.yAxisLabels.push(...context.drawingProjection.yAxisLabels)
       context.yAxisRanges.push(...context.drawingProjection.yAxisRanges)
@@ -1033,7 +1039,8 @@ export class ChartRenderer {
       }
       // 画 overlay canvas（仅 overlay 角色 layer）；All 级也画
       if (shouldUpdateOverlay) {
-        sceneRenderer.beginFrame(region)
+        // GPU 主层在本帧已经清过；overlay 不得清除其可见 GPU 内容。
+        sceneRenderer.beginFrame(region, { clear: false })
         this.scene.paintPane(
           {
             renderer: sceneRenderer,
@@ -1178,6 +1185,39 @@ export class ChartRenderer {
   private checkVisibleRangeGapWhenIdle(): void {
     if (this.deps.getInteraction().isPointerDown()) return
     this.deps.getDataManager().checkVisibleRangeGap()
+  }
+
+  /** 在成功绘制后记录本帧可见区，并按需触发缺口加载。 */
+  private checkVisibleRangeGapAfterRender(frame: FrameContext): void {
+    if (frame.useCachedFrame) return
+    const previous = this._prevFrameRange
+    const changed =
+      !previous ||
+      frame.range.start !== previous.visible.start ||
+      frame.range.end !== previous.visible.end ||
+      frame.rawRange.start !== previous.raw.start ||
+      frame.rawRange.end !== previous.raw.end
+    if (!changed) return
+
+    this._prevFrameRange = {
+      visible: { ...frame.range },
+      raw: { ...frame.rawRange },
+    }
+    this.checkVisibleRangeGapWhenIdle()
+  }
+
+  /** 在成功绘制后缓存主层几何，供下一帧 Overlay 复用。 */
+  private cacheDrawFrame(frame: FrameContext): void {
+    if (frame.useCachedFrame) return
+    this.cachedDrawFrame = {
+      viewport: { ...frame.vp },
+      range: { ...frame.range },
+      kLinePositions: frame.kLinePositions,
+      kLineCenters: frame.kLineCenters,
+      kBarRects: frame.kBarRects,
+      kWidthPx: frame.kWidthPx,
+      fiveDayTimeShareGeometry: frame.fiveDayTimeShareGeometry,
+    }
   }
 
   clearCachedFrame(): void {

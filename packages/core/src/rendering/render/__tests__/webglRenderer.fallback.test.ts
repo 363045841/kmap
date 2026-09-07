@@ -52,6 +52,8 @@ function createMockSharedWebGLSurface() {
     clearRegion: vi.fn(),
     compositeRegionTo: vi.fn(),
     getPhysicalRegion: vi.fn(() => null),
+    beginFrame: vi.fn(() => false),
+    endFrame: vi.fn(),
     destroy: vi.fn(),
   }
 }

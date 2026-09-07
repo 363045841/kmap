@@ -4,10 +4,16 @@ import { SharedWebGLSurface } from '../../engine/renderers/webgl/sharedWebGLSurf
 
 import type { SurfaceBackend, SurfaceRegion, CompositeOptions } from './SurfaceBackend'
 
-export function createWebGLSurfaceBackend(surface: SharedWebGLSurface): SurfaceBackend {
+/** WebGL surface 对外暴露底层 canvas，供图表直接叠放到 2D canvas 下方。 */
+export type WebGLSurfaceBackend = SurfaceBackend & {
+  readonly canvas: HTMLCanvasElement
+}
+
+export function createWebGLSurfaceBackend(surface: SharedWebGLSurface): WebGLSurfaceBackend {
   let disposed = false
 
   return {
+    canvas: surface.getCanvas(),
     isAvailable(): boolean {
       if (disposed) return false
       return surface.isAvailable()

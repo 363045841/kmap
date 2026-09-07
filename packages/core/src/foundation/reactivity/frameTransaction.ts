@@ -137,6 +137,7 @@ export function createFrameTransaction<TInput extends Record<string, unknown>, T
     nextPending = mergeInput(base, patch)
   }
 
+  // 生成最终并发布的不可变快照
   function flush(): Readonly<TSnapshot> {
     // 禁止嵌套发布：订阅者 / render 中 flush 只保留 dirty，由外层 complete 后再调度
     if (phase !== 'idle') {

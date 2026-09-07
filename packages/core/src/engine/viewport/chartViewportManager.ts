@@ -5,6 +5,8 @@ import type { ChartStateKernel } from '../state/chartStateKernel'
 export interface ViewportDependencies {
   getDom: () => ChartDom
   onResizeCompleted: () => void
+  /** 唯一原生 scroll 事件入口，由 Chart 区分程序与用户滚动。 */
+  onScroll: () => void
 }
 
 /**
@@ -29,7 +31,7 @@ export class ChartViewportManager {
     this.kernel.initViewport()
 
     this.onScroll = () => {
-      this.kernel.viewport.actions.syncFromDomScroll()
+      this.deps.onScroll()
     }
     target.addEventListener('scroll', this.onScroll, { passive: true })
 

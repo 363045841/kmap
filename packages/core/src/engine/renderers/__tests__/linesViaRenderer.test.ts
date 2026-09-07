@@ -175,11 +175,11 @@ describe('drawFilledBandViaRenderer', () => {
 })
 
 describe('compositeSceneRenderer hybrid DOM', () => {
-  it('composites on webgl and skips on webgpu', () => {
+  it('skips composite for visible GPU canvases', () => {
     const webgl = mockRenderer()
     const webgpu = mockRenderer()
     ;(webgpu.caps as { name: string }).name = 'webgpu'
-    expect(shouldCompositeSceneRenderer(webgl)).toBe(true)
+    expect(shouldCompositeSceneRenderer(webgl)).toBe(false)
     expect(shouldCompositeSceneRenderer(webgpu)).toBe(false)
 
     compositeSceneRenderer({
@@ -200,11 +200,11 @@ describe('compositeSceneRenderer hybrid DOM', () => {
       dpr: 1,
       sceneRenderer: webgl,
     })
-    expect(webgl.surface.compositeTo).toHaveBeenCalledOnce()
+    expect(webgl.surface.compositeTo).not.toHaveBeenCalled()
   })
 })
 
-describe('tryDrawFilledBandGpu alpha on hybrid DOM', () => {
+describe('tryDrawFilledBandGpu alpha on visible GPU canvases', () => {
   const upper = [
     { x: 0, y: 10 },
     { x: 1, y: 12 },
@@ -214,7 +214,7 @@ describe('tryDrawFilledBandGpu alpha on hybrid DOM', () => {
     { x: 1, y: 22 },
   ]
 
-  it('webgl keeps opaque color and applies alpha via compositeTo', () => {
+  it('webgl bakes alpha into fill color and skips compositeTo', () => {
     const r = mockRenderer()
     r.drawLines.mockReturnValue(true)
     const ok = tryDrawFilledBandGpu(
@@ -233,12 +233,8 @@ describe('tryDrawFilledBandGpu alpha on hybrid DOM', () => {
       0.2,
     )
     expect(ok).toBe(true)
-    expect(r.drawLines.mock.calls[0]![0].uniforms.color).toBe('rgba(0, 128, 255, 1)')
-    expect(r.surface.compositeTo).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ alpha: 0.2 }),
-    )
+    expect(r.drawLines.mock.calls[0]![0].uniforms.color).toBe('rgba(0, 128, 255, 0.2)')
+    expect(r.surface.compositeTo).not.toHaveBeenCalled()
   })
 
   it('webgpu bakes alpha into fill color and skips compositeTo', () => {

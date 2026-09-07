@@ -102,10 +102,10 @@ describe('candle sceneRenderer path', () => {
     createCandleRenderer().draw(ctx)
 
     expect(drawInstances).toHaveBeenCalled()
-    expect(compositeTo).toHaveBeenCalledOnce()
+    expect(compositeTo).not.toHaveBeenCalled()
   })
 
-  it('skips compositeTo when sceneRenderer is webgpu (hybrid DOM)', () => {
+  it('skips compositeTo when sceneRenderer is webgpu (visible GPU canvas)', () => {
     const { r, drawInstances, compositeTo } = makeSceneRenderer('webgpu')
 
     const data = Array.from({ length: 3 }, (_, i) => ({

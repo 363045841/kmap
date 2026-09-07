@@ -1,9 +1,8 @@
 /**
  * 底层 GPU surface 后端接口。
  *
- * 抽象 canvas 与 context 的生命周期、viewport/scissor 区域、清屏、合成到 2D overlay
- * canvas，以及销毁。当前 WebGL 实现通过 `createWebGLSurfaceBackend` 包装
- * SharedWebGLSurface；P1 的 WebGPU 将实现同一契约。
+ * 抽象 canvas 与 context 的生命周期、viewport/scissor 区域、清屏、可选合成到 2D
+ * canvas，以及销毁。WebGL / WebGPU canvas 均可直接作为可见 DOM 图层。
  *
  * 本文件是**纯接口**，不含实现，目的是：
  *
@@ -14,9 +13,7 @@
  * 设计说明：
  * - 所有 region 坐标都是**逻辑像素**，DPR 缩放由 surface 内部处理（与
  *   WebGLRegion 语义一致）。
- * - `compositeTo` 接收 2D `CanvasRenderingContext2D`，因为图表的最终合成目标是
- *   2D overlay canvas——WebGL/WebGPU 像素通过 `drawImage` 写入 overlay。未来
- *   绕过 2D overlay 的路径（WebGPU 直接上屏）可将 `compositeTo` 留空。
+ * - `compositeTo` 是兼容入口；可见 GPU canvas 路径不调用它。
  */
 
 export type SurfaceRegion = {
@@ -54,16 +51,14 @@ export interface SurfaceBackend {
   resize(widthLogical: number, heightLogical: number, dpr: number): void
 
   /**
-   * Bind a region for subsequent draw commands.
+   * 在活动帧内绑定一个区域，供后续 draw commands 使用。
    * Activates scissor + viewport sized to `region`. Returns false if the
-   * region is empty or the backend is unavailable.
+   * region is empty, backend is unavailable, or no frame is active.
    */
   bindRegion(region: SurfaceRegion): boolean
 
   /**
-   * Clear the most recently bound region to transparent black.
-   * Must be called after `bindRegion`. Backends MAY no-op if no region
-   * is currently bound.
+   * 清空指定区域到透明黑色。实现可同时清空离屏 target 和可见 surface。
    */
   clearRegion(region: SurfaceRegion): void
 

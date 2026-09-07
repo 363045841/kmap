@@ -427,7 +427,10 @@ export class InteractionController {
         }
         const clamped = Math.min(Math.max(0, this.scrollStartX + deltaX), this._cachedMaxScrollLeft)
         const dpr = this.chart.getCurrentDpr()
-        this.chart.kernel.viewport.actions.scrollTo(Math.round(clamped * dpr) / dpr)
+        if (this.chart.kernel.viewport.actions.scrollTo(Math.round(clamped * dpr) / dpr)) {
+          // 程序化滚动不再依赖原生 scroll 回调驱动重绘；统一交给 ChartRenderer 帧事务。
+          this.chart.scheduleDraw()
+        }
 
         const deltaY = e.clientY - this.dragStartY
         this.dragStartY = e.clientY
