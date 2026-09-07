@@ -122,6 +122,21 @@
                     @update-style="onUpdateDrawingStyle"
                     @delete="onDeleteDrawing"
                   />
+                  <CanvasToolbar v-if="isEditingLineLabel" class="drawing-label-position-toolbar">
+                    <button
+                      v-for="position in lineLabelPositionOptions"
+                      :key="position.value"
+                      type="button"
+                      class="drawing-label-position-toolbar__button"
+                      :class="{ 'is-active': lineLabelPosition === position.value }"
+                      :title="position.label"
+                      :aria-label="position.label"
+                      @mousedown.prevent
+                      @click="setLineLabelPosition(position.value)"
+                    >
+                      {{ position.label }}
+                    </button>
+                  </CanvasToolbar>
                 </CanvasToolbarStack>
                 <div
                   v-if="lineLabelTarget"
@@ -360,6 +375,7 @@
   import RangeSelectionExport from './RangeSelectionExport.vue'
   import TopToolbar, { type SymbolItem } from './TopToolbar.vue'
   import WatchlistPanel from './WatchlistPanel.vue'
+  import CanvasToolbar from './common/CanvasToolbar.vue'
   import CanvasToolbarStack from './common/CanvasToolbarStack.vue'
 
   // ── Props & Emits ──
@@ -912,12 +928,19 @@
   const lineLabelTarget = shallowRef<DrawingLineLabelTarget | null>(null)
   const lineLabelInput = ref<HTMLInputElement | null>(null)
   const lineLabelDraft = ref('')
+  const lineLabelPosition = ref<'start' | 'center' | 'end'>('center')
   const isEditingLineLabel = ref(false)
+  const lineLabelPositionOptions = [
+    { label: '起点', value: 'start' },
+    { label: '居中', value: 'center' },
+    { label: '终点', value: 'end' },
+  ] as const
 
-  /** 打开命中线段中心的就地文本编辑器。 */
+  /** 打开命中线段标签的就地文本编辑器。 */
   function openLineLabelEditor(): void {
     if (!lineLabelTarget.value) return
     lineLabelDraft.value = lineLabelTarget.value.text
+    lineLabelPosition.value = lineLabelTarget.value.position
     isEditingLineLabel.value = true
     void nextTick(() => lineLabelInput.value?.focus())
   }
@@ -926,13 +949,24 @@
   function saveLineLabel(): void {
     const target = lineLabelTarget.value
     if (!target || !isEditingLineLabel.value) return
-    updateDrawingLabel(target.drawingId, target.targetKind, target.lineIndex, lineLabelDraft.value)
+    updateDrawingLabel(
+      target.drawingId,
+      target.targetKind,
+      target.lineIndex,
+      lineLabelDraft.value,
+      lineLabelPosition.value,
+    )
     isEditingLineLabel.value = false
   }
 
   /** 放弃当前文本草稿，不修改绘图模型。 */
   function cancelLineLabelEditor(): void {
     isEditingLineLabel.value = false
+  }
+
+  /** 在不转移输入焦点的情况下切换线段文字位置。 */
+  function setLineLabelPosition(position: 'start' | 'center' | 'end'): void {
+    lineLabelPosition.value = position
   }
 
   const {
@@ -2159,6 +2193,27 @@
     );
     font: 12px/1.3 inherit;
     outline: none;
+  }
+
+  .drawing-label-position-toolbar {
+    display: flex;
+    gap: 2px;
+  }
+
+  .drawing-label-position-toolbar__button {
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 3px;
+    color: var(--chart-text-secondary);
+    background: transparent;
+    font: 12px/1.3 inherit;
+    cursor: pointer;
+  }
+
+  .drawing-label-position-toolbar__button:hover,
+  .drawing-label-position-toolbar__button.is-active {
+    color: var(--chart-text);
+    background: var(--klc-color-grid-minor);
   }
 
   .chart-container::-webkit-scrollbar {

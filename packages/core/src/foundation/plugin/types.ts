@@ -451,10 +451,19 @@ export type DrawingStyle = {
   fontSize?: number
 }
 
+/** 绘图线段文字在线段语义方向上的位置。 */
+export type DrawingLabelPosition = 'start' | 'center' | 'end'
+
+/** 绘图附属文本的持久化内容与位置。 */
+export type DrawingLabel = {
+  text: string
+  position: DrawingLabelPosition
+}
+
 /** 绘图附属文本；键为图元定义输出的线段或填充区域序号。 */
 export type DrawingLabels = {
-  line: Record<string, string>
-  area: Record<string, string>
+  line: Record<string, DrawingLabel>
+  area: Record<string, DrawingLabel>
 }
 
 /** 绘图所属的数据工作区。 */
@@ -486,9 +495,10 @@ export type ResolvedDrawingObject<TParams = Record<string, unknown>> = Omit<
 
 export type ScreenPoint = { x: number; y: number }
 
-/** 图元附属文字；位置由所属图元的几何中心决定。 */
+/** 图元附属文字；位置由所属图元在渲染期计算。 */
 export type PrimitiveTextAttachment = {
   text: string
+  position?: DrawingLabelPosition
   align?: 'left' | 'center' | 'right'
   baseline?: 'top' | 'middle' | 'bottom'
 }

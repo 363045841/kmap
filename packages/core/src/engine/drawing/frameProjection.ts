@@ -14,10 +14,7 @@ import { resolveChartWorkspaceId } from '../state/modeState'
 import { logicalIndexToScreenX } from '../viewport/logicalIndexToScreenX'
 
 import { DrawingDefinitionRegistry, DrawingStore } from './index'
-import {
-  createSelectionMarqueePrimitives,
-  type DrawingSelectionMarquee,
-} from './selectionMarquee'
+import { createSelectionMarqueePrimitives, type DrawingSelectionMarquee } from './selectionMarquee'
 
 type MutableDrawingFrameProjection = {
   primitives: DrawingPrimitive[]
@@ -106,7 +103,10 @@ function attachLineLabels(
     const label = drawing.labels?.line[String(lineIndex++)]
     return label === undefined
       ? primitive
-      : { ...primitive, text: { text: label, baseline: 'bottom' } }
+      : {
+          ...primitive,
+          text: { text: label.text, position: label.position, baseline: 'bottom' },
+        }
   })
 }
 
@@ -119,7 +119,9 @@ function attachAreaLabels(
   return primitives.map((primitive) => {
     if (primitive.kind !== 'area') return primitive
     const label = drawing.labels?.area[String(areaIndex++)]
-    return label === undefined ? primitive : { ...primitive, text: { text: label } }
+    return label === undefined
+      ? primitive
+      : { ...primitive, text: { text: label.text, position: label.position } }
   })
 }
 

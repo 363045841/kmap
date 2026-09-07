@@ -52,7 +52,8 @@ describe('HitTester', () => {
         { id: 'a', type: 'point', time: 1_000, price: 40 },
         { id: 'b', type: 'point', time: 2_000, price: 140 },
       ],
-      labels: { line: { 3: '50% text' }, area: {} },
+      labels: { line: { 3: { text: '50% text', position: 'center' } }, area: {} },
+      params: {},
       style: {},
     }
 
@@ -64,6 +65,7 @@ describe('HitTester', () => {
       y: 120,
       rotation: 0,
       text: '50% text',
+      position: 'center',
     })
   })
 
@@ -101,7 +103,8 @@ describe('HitTester', () => {
         { id: 'a', type: 'point', time: 1_000, price: 40 },
         { id: 'b', type: 'point', time: 2_000, price: 140 },
       ],
-      labels: { line: {}, area: { 0: '区域文本' } },
+      labels: { line: {}, area: { 0: { text: '区域文本', position: 'center' } } },
+      params: {},
       style: {},
     }
 

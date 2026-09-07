@@ -6,6 +6,7 @@ import { lookupInstrumentsBySymbol, searchInstruments } from '../../data/provide
 import type { MarketDataProviderRegistry } from '../../data/provider/registry'
 import { MarketDataCache } from '../../data/buffer/marketDataCache'
 import { computed, type ReadonlySignal } from '../../foundation/reactivity/signal'
+import { AGENT_DRAWING_COLOR_VALUES } from '../../foundation/tokens/agentDrawingColors'
 import type { ChartDataView } from '../../foundation/types/chartView'
 import type {
   DrawingAnchorCommandInput,
@@ -175,29 +176,44 @@ const DRAWING_KIND_VALUES = [
 ] as const
 
 const DrawingKindToolParameter = Type.Union(DRAWING_KIND_VALUES.map((value) => Type.Literal(value)))
+const AgentDrawingColorToolParameter = Type.Union(
+  AGENT_DRAWING_COLOR_VALUES.map((value) => Type.Literal(value)),
+)
 const DrawingAnchorToolParameters = Type.Object({
   tradingDate: Type.Optional(TradingDateToolParameter),
   price: Type.Number(),
 })
 const DrawingStyleToolParameters = Type.Partial(
   Type.Object({
-    stroke: Type.String({ minLength: 1 }),
+    stroke: AgentDrawingColorToolParameter,
     strokeWidth: Type.Number({ exclusiveMinimum: 0 }),
     strokeStyle: Type.Union([
       Type.Literal('solid'),
       Type.Literal('dashed'),
       Type.Literal('dotted'),
     ]),
-    fill: Type.String({ minLength: 1 }),
+    fill: AgentDrawingColorToolParameter,
     fillOpacity: Type.Number({ minimum: 0, maximum: 1 }),
     pointRadius: Type.Number({ exclusiveMinimum: 0 }),
-    textColor: Type.String({ minLength: 1 }),
+    textColor: AgentDrawingColorToolParameter,
     fontSize: Type.Number({ exclusiveMinimum: 0 }),
   }),
 )
 const DrawingLabelsToolParameters = Type.Object({
-  line: Type.Record(Type.String({ pattern: '^\\d+$' }), Type.String()),
-  area: Type.Record(Type.String({ pattern: '^\\d+$' }), Type.String()),
+  line: Type.Record(
+    Type.String({ pattern: '^\\d+$' }),
+    Type.Object({
+      text: Type.String(),
+      position: Type.Union([Type.Literal('start'), Type.Literal('center'), Type.Literal('end')]),
+    }),
+  ),
+  area: Type.Record(
+    Type.String({ pattern: '^\\d+$' }),
+    Type.Object({
+      text: Type.String(),
+      position: Type.Union([Type.Literal('start'), Type.Literal('center'), Type.Literal('end')]),
+    }),
+  ),
 })
 const DrawingCreateToolParameters = Type.Object({
   kind: DrawingKindToolParameter,

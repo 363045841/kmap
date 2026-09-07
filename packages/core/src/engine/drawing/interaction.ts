@@ -1,5 +1,9 @@
 import type { DrawingChartAdapter } from '../../controllers/types'
-import type { DrawingObject, DrawingStyle } from '../../foundation/plugin/index'
+import type {
+  DrawingLabelPosition,
+  DrawingObject,
+  DrawingStyle,
+} from '../../foundation/plugin/index'
 import { ChartWorkspaceId } from '../../foundation/types/chartView'
 
 import { AnchorCollector } from './AnchorCollector'
@@ -29,7 +33,7 @@ export interface DrawingInteractionCallbacks {
   onDrawingSelected?: (drawings: ReadonlyArray<DrawingObject>) => void
 }
 
-/** 命中线段中心后供宿主渲染就地文本编辑器的几何快照。 */
+/** 命中线段标签后供宿主渲染就地文本编辑器的几何快照。 */
 export interface DrawingLineLabelTarget {
   readonly drawingId: string
   readonly targetKind: 'line' | 'area'
@@ -38,13 +42,12 @@ export interface DrawingLineLabelTarget {
   readonly y: number
   readonly rotation: number
   readonly text: string
+  readonly position: DrawingLabelPosition
 }
 
 /** 指针会话的唯一状态：框选和拖拽互斥，禁止通过多个可空字段推导行为。 */
 type DrawingPointerSession =
-  | { kind: 'idle' }
-  | { kind: 'marquee'; marquee: DrawingSelectionMarquee }
-  | { kind: 'drag' }
+  { kind: 'idle' } | { kind: 'marquee'; marquee: DrawingSelectionMarquee } | { kind: 'drag' }
 
 /**
  * 绘图交互控制器 —— 精简事件路由，组合子模块。
@@ -155,7 +158,7 @@ export class DrawingInteractionController {
     return this.drawingState.getSelectedDrawings()
   }
 
-  /** 查找指针命中的线段中心文本区域；只在光标模式且非拖拽时可编辑。 */
+  /** 查找指针命中的线段标签区域；只在光标模式且非拖拽时可编辑。 */
   getLineLabelTarget(e: PointerEvent, container: HTMLElement): DrawingLineLabelTarget | null {
     if (this.getActiveTool() !== 'cursor' || this.dragHandler.isDragging()) return null
     const pointer = resolveDrawingPointer(e, container, this.adapter)
@@ -317,7 +320,8 @@ export class DrawingInteractionController {
         .filter(
           (drawing) =>
             drawing.paneId === pointer.paneId &&
-            (drawing.workspaceId ?? ChartWorkspaceId.KLine) === this.adapter.getDrawingWorkspaceId(),
+            (drawing.workspaceId ?? ChartWorkspaceId.KLine) ===
+              this.adapter.getDrawingWorkspaceId(),
         ),
       this.adapter,
     )
