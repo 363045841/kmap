@@ -102,6 +102,19 @@ const DEFAULT_DRAWING_STYLE: Readonly<DrawingStyle> = {
   strokeStyle: 'solid',
 }
 
+/** 将用户 Enter 与外部输入统一为绘图文档的字面量换行控制码。 */
+function normalizeDrawingLabels(labels: DrawingLabels): DrawingLabels {
+  const normalizeText = (text: string) => text.replace(/\r\n?|\n/g, '\\n')
+  const normalizeGroup = (group: DrawingLabels['line']) =>
+    Object.fromEntries(
+      Object.entries(group).map(([key, label]) => [key, { ...label, text: normalizeText(label.text) }]),
+    )
+  return {
+    line: normalizeGroup(labels.line),
+    area: normalizeGroup(labels.area),
+  }
+}
+
 /** 返回不同图元种类要求的锚点数。 */
 function getRequiredAnchorCount(kind: DrawingKind): 1 | 2 | 3 {
   switch (kind) {
@@ -165,7 +178,7 @@ export class DrawingDocument {
       anchors,
       params:
         input.params ?? (input.kind === 'regression-channel' ? { sigma: 2 } : Object.freeze({})),
-      labels: input.labels ?? { line: {}, area: {} },
+      labels: normalizeDrawingLabels(input.labels ?? { line: {}, area: {} }),
       style: {
         ...DEFAULT_DRAWING_STYLE,
         ...(isChannel(input.kind) ? { fillOpacity: 0.1 } : {}),
@@ -180,7 +193,10 @@ export class DrawingDocument {
   updateDrawing(drawing: DrawingObject): DrawingObject | null {
     const current = this.getDrawing(drawing.id)
     if (!current || drawing.kind !== current.kind || drawing.paneId !== current.paneId) return null
-    return this.dependencies.drawingState.actions.updateDrawing(drawing.id, drawing)
+    return this.dependencies.drawingState.actions.updateDrawing(drawing.id, {
+      ...drawing,
+      labels: normalizeDrawingLabels(drawing.labels ?? { line: {}, area: {} }),
+    })
   }
 
   /** 将外部声明式 patch 转换为完整模型快照后提交。 */
@@ -314,7 +330,12 @@ export class DrawingDocument {
   /** 原子替换整份文档，仅供受控组件与导入导出使用。 */
   replaceDrawings(drawings: ReadonlyArray<DrawingObject>): void {
     this.dependencies.drawingState.actions.setDrawings(
-      drawings.filter((drawing) => drawing.id !== PREVIEW_ID),
+      drawings
+        .filter((drawing) => drawing.id !== PREVIEW_ID)
+        .map((drawing) => ({
+          ...drawing,
+          labels: normalizeDrawingLabels(drawing.labels ?? { line: {}, area: {} }),
+        })),
     )
   }
 
