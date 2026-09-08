@@ -46,7 +46,6 @@ export function createAgentProviderSettingsPinia() {
 /** 管理单个 Agent Workspace 的 Provider 设置草稿与请求状态。 */
 export const useAgentProviderSettingsStore = defineStore('agent-provider-settings', () => {
   const open = ref(false)
-  const toolsOpen = ref(false)
   const baseUrl = ref('')
   const apiKey = ref('')
   const exaApiKey = ref('')
@@ -131,7 +130,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     }
   }
 
-  /** 打开弹窗并按当前生效配置名称恢复表单草稿。 */
+  /** 打开 Agent 设置并加载当前 Provider 草稿与工具状态。 */
   async function show(status: ProviderStatusView): Promise<void> {
     open.value = true
     operationError.value = null
@@ -142,10 +141,15 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     protocol.value = status.protocol ?? PROVIDER_API_PROTOCOLS[0]
     model.value = status.modelId ?? ''
     try {
-      const nextProfiles = bridge ? await bridge.listProviderProfiles() : []
+      const [nextProfiles, nextTools] = await Promise.all([
+        bridge ? bridge.listProviderProfiles() : [],
+        bridge ? bridge.listTools() : [],
+      ])
       profiles.value = nextProfiles
+      setTools(nextTools)
     } catch (error) {
       profiles.value = []
+      tools.value = []
       operationError.value = toOperationError(error)
     }
     profileName.value = status.profileName ?? ''
@@ -153,25 +157,12 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     testResult.value = null
   }
 
-  /** 打开工具管理弹窗并读取当前持久化的启用状态。 */
-  async function showTools(): Promise<void> {
-    toolsOpen.value = true
-    operationError.value = null
-    try {
-      tools.value = bridge ? await bridge.listTools() : []
-      for (const tool of tools.value) {
-        toolInputs.value[tool.name] ??= '{\n  \n}'
-      }
-    } catch (error) {
-      tools.value = []
-      operationError.value = toOperationError(error)
+  /** 用当前注册工具刷新面板状态并初始化调试参数。 */
+  function setTools(nextTools: AgentToolView[]): void {
+    tools.value = nextTools
+    for (const tool of nextTools) {
+      toolInputs.value[tool.name] ??= '{\n  \n}'
     }
-  }
-
-  /** 关闭工具管理弹窗。 */
-  function closeTools(): void {
-    toolsOpen.value = false
-    operationError.value = null
   }
 
   /** 保存工具开关后更新弹窗中的当前状态。 */
@@ -180,7 +171,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     operationError.value = null
     try {
       await bridge.setToolEnabled(name, enabled)
-      tools.value = await bridge.listTools()
+      setTools(await bridge.listTools())
     } catch (error) {
       operationError.value = toOperationError(error)
     }
@@ -333,7 +324,6 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
 
   return {
     open,
-    toolsOpen,
     baseUrl,
     apiKey,
     exaApiKey,
@@ -358,8 +348,6 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     selectProfile,
     createProfile,
     show,
-    showTools,
-    closeTools,
     setToolEnabled,
     setToolInput,
     debugTool,

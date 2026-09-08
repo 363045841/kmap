@@ -85,7 +85,7 @@ describe('AgentWorkspace', () => {
 
   it('refreshes the Provider catalog and selects a discovered model', async () => {
     const mounted = await mountWorkspace()
-    await mounted.wrapper.get('button[aria-label="Provider settings"]').trigger('click')
+    await mounted.wrapper.get('button[aria-label="Agent settings"]').trigger('click')
     const dialog = document.querySelector<HTMLElement>('.base-modal')!
     dialog.querySelector<HTMLButtonElement>('.provider-protocol-control .dropdown__trigger')!.click()
     await flushPromises()
