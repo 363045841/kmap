@@ -252,6 +252,30 @@ export { computeLinearRegression }
 
 const LINE_TEXT_GAP_PX = 6
 
+/** 将绘图文档中的字面量换行控制码拆为逻辑文本行。 */
+function splitDrawingTextLines(text: string): string[] {
+  return text.split('\\n')
+}
+
+/** 在当前坐标系绘制由字面量换行控制码分隔的多行文本，并保持原始基线语义。 */
+function drawMultilineText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  baseline: CanvasTextBaseline,
+): void {
+  const lines = splitDrawingTextLines(text)
+  const lineHeight = fontSize * 1.2
+  const height = lines.length * lineHeight
+  const top = baseline === 'top' ? y : baseline === 'middle' ? y - height / 2 : y - height
+  ctx.textBaseline = 'top'
+  for (const [index, line] of lines.entries()) {
+    ctx.fillText(line, x, top + index * lineHeight)
+  }
+}
+
 /** 计算线段文字的锚点与本地对齐方式，保证端点文字位于线段外侧。 */
 function getLineTextLayout(
   start: { x: number; y: number },
@@ -287,9 +311,16 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
       if (primitive.text) {
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
-        ctx.textAlign = primitive.text.align ?? 'center'
-        ctx.textBaseline = primitive.text.baseline ?? 'middle'
-        ctx.fillText(primitive.text.text, primitive.point.x, primitive.point.y)
+        const align = primitive.text.align ?? 'center'
+        ctx.textAlign = align
+        drawMultilineText(
+          ctx,
+          primitive.text.text,
+          primitive.point.x,
+          primitive.point.y,
+          primitive.style?.fontSize ?? 12,
+          primitive.text.baseline ?? 'middle',
+        )
       }
       ctx.restore()
     },
@@ -314,10 +345,17 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
         ctx.textAlign = primitive.text.align ?? textLayout.align
-        ctx.textBaseline = primitive.text.baseline ?? 'middle'
+        const baseline = primitive.text.baseline ?? 'middle'
         ctx.translate(textLayout.x, textLayout.y)
         ctx.rotate(textLayout.rotation)
-        ctx.fillText(primitive.text.text, 0, 0)
+        drawMultilineText(
+          ctx,
+          primitive.text.text,
+          0,
+          0,
+          primitive.style?.fontSize ?? 12,
+          baseline,
+        )
         ctx.restore()
       }
 
@@ -374,11 +412,15 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
         ctx.textAlign = primitive.text.align ?? 'center'
-        ctx.textBaseline = primitive.text.baseline ?? 'middle'
-        ctx.fillText(
+        const x = (Math.min(...xs) + Math.max(...xs)) / 2
+        const y = (Math.min(...ys) + Math.max(...ys)) / 2
+        drawMultilineText(
+          ctx,
           primitive.text.text,
-          (Math.min(...xs) + Math.max(...xs)) / 2,
-          (Math.min(...ys) + Math.max(...ys)) / 2,
+          x,
+          y,
+          primitive.style?.fontSize ?? 12,
+          primitive.text.baseline ?? 'middle',
         )
       }
       ctx.restore()
@@ -388,9 +430,16 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
       ctx.save()
       ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
       ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
-      ctx.textAlign = primitive.align ?? 'left'
-      ctx.textBaseline = primitive.baseline ?? 'bottom'
-      ctx.fillText(primitive.text, primitive.point.x, primitive.point.y)
+      const align = primitive.align ?? 'left'
+      ctx.textAlign = align
+      drawMultilineText(
+        ctx,
+        primitive.text,
+        primitive.point.x,
+        primitive.point.y,
+        primitive.style?.fontSize ?? 12,
+        primitive.baseline ?? 'bottom',
+      )
       ctx.restore()
     },
 
@@ -435,11 +484,18 @@ export function createDefaultPrimitiveRendererSet(): PrimitiveRendererSet {
         ctx.fillStyle = primitive.style?.textColor ?? primitive.style?.stroke ?? '#2962ff'
         ctx.font = `${primitive.style?.fontSize ?? 12}px sans-serif`
         ctx.textAlign = primitive.text.align ?? textLayout.align
-        ctx.textBaseline = primitive.text.baseline ?? 'middle'
+        const baseline = primitive.text.baseline ?? 'middle'
         ctx.save()
         ctx.translate(textLayout.x, textLayout.y)
         ctx.rotate(textLayout.rotation)
-        ctx.fillText(primitive.text.text, 0, 0)
+        drawMultilineText(
+          ctx,
+          primitive.text.text,
+          0,
+          0,
+          primitive.style?.fontSize ?? 12,
+          baseline,
+        )
         ctx.restore()
       }
       ctx.restore()

@@ -83,6 +83,14 @@ describe('BrowserAgentBridge', () => {
     )
   })
 
+  it('lists web search before an Exa key is configured', async () => {
+    const bridge = new BrowserAgentBridge()
+
+    await expect(bridge.listTools()).resolves.toContainEqual(
+      expect.objectContaining({ name: 'web_search' }),
+    )
+  })
+
   it('requests the Provider model catalog with the supplied credential', async () => {
     const fetchMock = vi.fn(async () => modelsResponse())
     vi.stubGlobal('fetch', fetchMock)
@@ -243,6 +251,38 @@ describe('BrowserAgentBridge', () => {
       baseUrl: 'https://provider.example/v1',
       modelId: 'chart-model',
     })
+  })
+
+  it('persists the Exa key locally and exposes the web search tool', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          results: [{ title: 'Search result', url: 'https://example.com', text: 'Result snippet' }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const bridge = new BrowserAgentBridge()
+
+    await bridge.saveProvider({
+      baseUrl: 'https://provider.example/v1',
+      apiKey: 'model-key',
+      exaApiKey: 'exa-key',
+      model: 'chart-model',
+      modelName: 'Chart model',
+      profileName: 'Provider example',
+      protocol: 'openai-completions',
+    })
+
+    await expect(bridge.listTools()).resolves.toContainEqual(
+      expect.objectContaining({ name: 'web_search', enabled: true }),
+    )
+    await expect(bridge.debugTool('web_search', { query: 'KLineChart' })).resolves.toMatchObject({
+      summary: 'Found 1 web results.',
+    })
+    expect(new Headers(fetchMock.mock.calls[0]![1]?.headers).get('x-api-key')).toBe('exa-key')
+    expect(JSON.stringify(await bridge.listProviderProfiles())).not.toContain('exa-key')
   })
 
   it('keeps an opened message snapshot isolated from a new run', async () => {
@@ -493,18 +533,20 @@ describe('BrowserAgentBridge', () => {
       getAvailableMarketDataSourceIds: () => [],
       getAvailableDrawingPaneIds: () => ['main', 'volume'],
     } as unknown as ChartAgentController
-    const bridge = new BrowserAgentBridge()
-    const createRegisteredTools = (
+    const bridge = new BrowserAgentBridge({ getChartAgent: () => agent })
+    const resolveTools = (
       bridge as unknown as {
-        createRegisteredTools(
-          agent: ChartAgentController,
-          readOnly: boolean,
-        ): readonly RuntimeToolDefinition[]
+        toolRegistry: {
+          resolve(context: {
+            agent: ChartAgentController
+            readOnly: boolean
+          }): readonly RuntimeToolDefinition[]
+        }
       }
-    ).createRegisteredTools(agent, false)
+    ).toolRegistry.resolve({ agent, readOnly: false })
 
     expect(
-      createRegisteredTools.find((tool) => tool.name === 'drawing_create')?.description,
+      resolveTools.find((tool) => tool.name === 'drawing_create')?.description,
     ).toContain('Available runtime paneIds: main, volume.')
   })
 })

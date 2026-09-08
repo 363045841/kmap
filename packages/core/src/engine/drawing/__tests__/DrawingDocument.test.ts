@@ -52,6 +52,48 @@ describe('DrawingDocument', () => {
     expect(Object.isFrozen(drawing)).toBe(true)
   })
 
+  it('stores user newlines as the shared literal drawing newline control code', () => {
+    const { document } = createDocument()
+
+    const drawing = document.createDrawing({
+      kind: 'trend-line',
+      paneId: 'main',
+      anchors: [
+        { timestamp: 1_000, price: 10 },
+        { timestamp: 1_000, price: 12 },
+      ],
+      labels: { line: { 0: { text: '支撑位\n跌破则止损', position: 'center' } }, area: {} },
+    })
+
+    expect(drawing.labels?.line['0']?.text).toBe('支撑位\\n跌破则止损')
+  })
+
+  it('normalizes label newlines when updating and importing drawings', () => {
+    const { document } = createDocument()
+    const drawing = document.createDrawing({
+      kind: 'trend-line',
+      paneId: 'main',
+      anchors: [
+        { timestamp: 1_000, price: 10 },
+        { timestamp: 1_000, price: 12 },
+      ],
+    })
+
+    const updated = document.updateDrawing({
+      ...drawing,
+      labels: { line: { 0: { text: '更新\r\n标签', position: 'center' } }, area: {} },
+    })
+    expect(updated?.labels?.line['0']?.text).toBe('更新\\n标签')
+
+    document.replaceDrawings([
+      {
+        ...updated!,
+        labels: { line: {}, area: { 0: { text: '导入\n标签', position: 'center' } } },
+      },
+    ])
+    expect(document.getDrawing(drawing.id)?.labels?.area['0']?.text).toBe('导入\\n标签')
+  })
+
   it('persists a future-slot anchor from its existing base bar', () => {
     const { document } = createDocument()
 

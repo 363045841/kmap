@@ -203,14 +203,14 @@ const DrawingLabelsToolParameters = Type.Object({
   line: Type.Record(
     Type.String({ pattern: '^\\d+$' }),
     Type.Object({
-      text: Type.String(),
+      text: Type.String({ description: '标签文本。使用字面量 \\n 作为唯一换行控制码。' }),
       position: Type.Union([Type.Literal('start'), Type.Literal('center'), Type.Literal('end')]),
     }),
   ),
   area: Type.Record(
     Type.String({ pattern: '^\\d+$' }),
     Type.Object({
-      text: Type.String(),
+      text: Type.String({ description: '标签文本。使用字面量 \\n 作为唯一换行控制码。' }),
       position: Type.Union([Type.Literal('start'), Type.Literal('center'), Type.Literal('end')]),
     }),
   ),

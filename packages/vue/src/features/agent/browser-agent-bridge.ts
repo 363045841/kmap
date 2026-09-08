@@ -4,7 +4,11 @@ import {
   AGENT_UI_PROTOCOL_VERSION,
   PiRunDriver,
   type PiRunPlan,
+  createExaWebSearchProvider,
   createOpenAiCompatibleRuntimeSupport,
+  createWebSearchTool,
+  RuntimeToolRegistry,
+  WEB_SEARCH_TOOL_METADATA,
   fetchOpenAiCompatibleModels,
   normalizeProviderBaseUrl,
   PROVIDER_SETTINGS_VERSION,
@@ -132,9 +136,18 @@ function drawingCreateFailure(
 interface BrowserProviderProfile {
   name: string
   apiKey: string
+  exaApiKey?: string
   settings?: OpenAiCompatibleProviderSettings
   active: boolean
 }
+
+/** Browser 宿主解析运行时工具所需的最小上下文。 */
+interface BrowserToolContext {
+  readonly agent: ChartAgentController | null | undefined
+  readonly readOnly: boolean
+}
+
+type RegisteredChartTool = ReturnType<typeof getRegisteredChartTools>[number]
 
 // 移除 Pi SDK 的浏览器诊断头，避免不支持这些头的 OpenAI-compatible Provider 拒绝 CORS 预检。
 async function fetchBrowserProvider(
@@ -310,6 +323,7 @@ export class BrowserAgentBridge implements AgentBridgeClient {
   >()
   private readonly profiles = new BrowserProviderProfiles()
   private readonly enabledTools = new BrowserEnabledTools()
+  private readonly toolRegistry = new RuntimeToolRegistry<BrowserToolContext>()
   private readonly credentials = new BrowserProviderCredentialStore(this.profiles)
   private readonly settings = new BrowserProviderSettingsStore(this.profiles)
   private readonly support
@@ -324,16 +338,16 @@ export class BrowserAgentBridge implements AgentBridgeClient {
 
   constructor(options: BrowserAgentBridgeOptions = {}) {
     this.getChartAgent = options.getChartAgent ?? (() => null)
+    this.registerTools()
     this.support = createOpenAiCompatibleRuntimeSupport({
       credentials: this.credentials,
       settings: this.settings,
       fetch: fetchBrowserProvider,
       tools: (context) => {
-        const agent = this.getChartAgent()
-        if (!agent) return []
         const enabledNames = this.enabledToolNames()
-        const registeredTools = this.createRegisteredTools(agent, context.readOnly)
-        return registeredTools.filter((tool) => enabledNames.has(tool.name))
+        return this.toolRegistry.resolve(this.toolContext(context.readOnly)).filter((tool) =>
+          enabledNames.has(tool.name),
+        )
       },
     })
     const session = this.createSessionRecord()
@@ -388,20 +402,17 @@ export class BrowserAgentBridge implements AgentBridgeClient {
     return profileName ? { ...status, profileName } : status
   }
 
-  /** 返回可在当前 Browser 宿主中管理的已注册工具。 */
+  /** 返回当前 Browser 宿主中可管理的图表与网络工具。 */
   async listTools() {
     const enabledNames = this.enabledToolNames()
-    return getRegisteredChartTools().map(({ config }) => ({
-      name: config.name,
-      label: config.label,
-      description: config.description,
-      enabled: enabledNames.has(config.name),
-    }))
+    return this.toolRegistry
+      .list()
+      .map((tool) => ({ ...tool, enabled: enabledNames.has(tool.name) }))
   }
 
-  /** 保存用户对已注册工具的启用选择。 */
+  /** 保存用户对当前可用工具的启用选择。 */
   async setToolEnabled(name: string, enabled: boolean): Promise<void> {
-    const registeredNames = new Set(getRegisteredChartTools().map((tool) => tool.config.name))
+    const registeredNames = new Set(this.availableToolNames())
     if (!registeredNames.has(name)) {
       throw new AgentRuntimeError('INVALID_PAYLOAD', `Unknown Agent tool '${name}'.`)
     }
@@ -411,15 +422,11 @@ export class BrowserAgentBridge implements AgentBridgeClient {
     this.enabledTools.write(enabledNames)
   }
 
-  /** 手动执行一个已注册工具，复用 Agent 调用的 schema 与宿主绑定。 */
+  /** 手动执行一个当前可用工具，复用 Agent 调用的 schema 与宿主绑定。 */
   async debugTool(name: string, input: unknown) {
-    const agent = this.getChartAgent()
-    if (!agent) {
-      throw new AgentRuntimeError('TARGET_LOST', 'A chart is required to debug this tool.')
-    }
-    const tool = this.createRegisteredTools(agent, false).find((item) => item.name === name)
+    const tool = this.toolRegistry.resolve(this.toolContext(false)).find((item) => item.name === name)
     if (!tool) {
-      throw new AgentRuntimeError('INVALID_PAYLOAD', `Unknown Agent tool '${name}'.`)
+      throw new AgentRuntimeError('TOOL_NOT_ALLOWED', `Agent tool '${name}' is unavailable.`)
     }
     const result = await tool.execute(input, {
       runId: `debug:${globalThis.crypto.randomUUID()}`,
@@ -430,23 +437,55 @@ export class BrowserAgentBridge implements AgentBridgeClient {
     return { content: result.content, summary: result.summary }
   }
 
-  /** 读取已注册工具的当前启用集合，并忽略旧版本遗留的未知名称。 */
+  /** 读取当前可用工具的启用集合，并忽略旧版本遗留的未知名称。 */
   private enabledToolNames(): Set<string> {
-    const registeredNames = getRegisteredChartTools().map((tool) => tool.config.name)
+    const registeredNames = this.availableToolNames()
     const enabledNames = this.enabledTools.read(registeredNames)
     return new Set([...enabledNames].filter((name) => registeredNames.includes(name)))
   }
 
-  /** 将 Core 注册的图表 API 适配为 Agent Runtime 工具，不复制领域能力。 */
-  private createRegisteredTools(
+  /** 返回当前配置可用的图表与网络工具名称。 */
+  private availableToolNames(): readonly string[] {
+    return this.toolRegistry.list().map((tool) => tool.name)
+  }
+
+  /** 返回当前 Browser 宿主中的运行时工具解析上下文。 */
+  private toolContext(readOnly: boolean): BrowserToolContext {
+    return { agent: this.getChartAgent(), readOnly }
+  }
+
+  /** 将图表与网络工具注册到同一个 Runtime 工具注册表。 */
+  private registerTools(): void {
+    for (const chartTool of getRegisteredChartTools()) {
+      this.toolRegistry.register({
+        ...chartTool.config,
+        create: ({ agent, readOnly }) => {
+          if (!agent || (readOnly && chartTool.config.safety !== 'read-only')) return undefined
+          return this.createRegisteredTool(chartTool, agent)
+        },
+      })
+    }
+    this.toolRegistry.register({
+      ...WEB_SEARCH_TOOL_METADATA,
+      create: () => this.createWebSearchTool(),
+    })
+  }
+
+  /** 为已保存的 Exa Key 创建本次运行可用的网络搜索工具。 */
+  private createWebSearchTool(): RuntimeToolDefinition | undefined {
+    const apiKey = this.profiles.active()?.exaApiKey?.trim()
+    if (!apiKey) return undefined
+    return createWebSearchTool(createExaWebSearchProvider({ apiKey, fetch: fetchBrowserProvider }))
+  }
+
+  /** 将单个 Core 图表 API 适配为 Agent Runtime 工具，不复制领域能力。 */
+  private createRegisteredTool(
+    tool: RegisteredChartTool,
     agent: ChartAgentController,
-    readOnly: boolean,
-  ): readonly RuntimeToolDefinition[] {
+  ): RuntimeToolDefinition {
     const sourceIds = agent.getAvailableMarketDataSourceIds()
     const drawingPaneIds = agent.getAvailableDrawingPaneIds()
-    return getRegisteredChartTools()
-      .filter((tool) => !readOnly || tool.config.safety === 'read-only')
-      .map((tool) => ({
+    return {
         ...tool.config,
         description: this.toolDescription(
           tool.config.name,
@@ -477,7 +516,7 @@ export class BrowserAgentBridge implements AgentBridgeClient {
             summary: Array.isArray(value) ? `Returned ${value.length} items.` : 'Tool completed.',
           }
         },
-      }))
+    }
   }
 
   /** 为依赖运行时资源的工具追加可用的精确标识。 */
@@ -668,6 +707,7 @@ export class BrowserAgentBridge implements AgentBridgeClient {
     const profile: BrowserProviderProfile = {
       name: profileName,
       apiKey,
+      exaApiKey: input.exaApiKey?.trim() || profiles[existingIndex]?.exaApiKey,
       settings,
       active: true,
     }

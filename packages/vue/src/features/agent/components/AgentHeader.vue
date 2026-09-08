@@ -48,9 +48,6 @@
         >
           <IconSettings aria-hidden="true" />
         </button>
-        <button type="button" :title="text.tools" :aria-label="text.tools" @click="$emit('tools')">
-          <IconTools aria-hidden="true" />
-        </button>
         <button
           type="button"
           data-testid="agent-panel-close"
@@ -101,7 +98,6 @@
   import IconPlus from '~icons/tabler/plus'
   import IconSettings from '~icons/tabler/settings'
   import IconSparkles from '~icons/tabler/sparkles'
-  import IconTools from '~icons/tabler/tools'
   import IconTrash from '~icons/tabler/trash'
 
   const props = defineProps<{
@@ -118,7 +114,6 @@
     rename: [title: string]
     delete: []
     settings: []
-    tools: []
     close: []
     'toggle-locale': []
   }>()
