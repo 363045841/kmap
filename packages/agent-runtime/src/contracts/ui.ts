@@ -344,6 +344,7 @@ export interface ProviderTestInput {
 export interface ProviderSaveInput extends ProviderTestInput {
   modelName: string
   profileName: string
+  exaApiKey?: string
 }
 export interface ProviderProfileView {
   name: string

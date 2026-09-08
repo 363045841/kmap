@@ -63,6 +63,15 @@
           />
         </label>
         <label class="provider-field">
+          <span class="provider-field__label">{{ text.exaApiKey }}</span>
+          <input
+            v-model="providerSettings.exaApiKey"
+            type="password"
+            autocomplete="new-password"
+            :placeholder="text.exaApiKeyPlaceholder"
+          />
+        </label>
+        <label class="provider-field">
           <span class="provider-field__label">{{ text.additionalHeaders }}</span>
           <textarea
             v-model="providerSettings.headers"

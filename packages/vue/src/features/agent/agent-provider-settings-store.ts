@@ -49,6 +49,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
   const toolsOpen = ref(false)
   const baseUrl = ref('')
   const apiKey = ref('')
+  const exaApiKey = ref('')
   const headers = ref('{}')
   const protocol = ref<ProviderApiProtocol>(PROVIDER_API_PROTOCOLS[0])
   const profileName = ref('')
@@ -95,6 +96,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
       profileName.value = name
       baseUrl.value = status.baseUrl ?? ''
       apiKey.value = ''
+      exaApiKey.value = ''
       headers.value = JSON.stringify(status.headers ?? {}, null, 2)
       protocol.value = status.protocol ?? PROVIDER_API_PROTOCOLS[0]
       model.value = status.modelId ?? ''
@@ -116,6 +118,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
       profileName.value = normalizedName
       baseUrl.value = ''
       apiKey.value = ''
+      exaApiKey.value = ''
       headers.value = '{}'
       protocol.value = PROVIDER_API_PROTOCOLS[0]
       model.value = ''
@@ -134,6 +137,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     operationError.value = null
     baseUrl.value = status.baseUrl ?? ''
     apiKey.value = ''
+    exaApiKey.value = ''
     headers.value = JSON.stringify(status.headers ?? {}, null, 2)
     protocol.value = status.protocol ?? PROVIDER_API_PROTOCOLS[0]
     model.value = status.modelId ?? ''
@@ -214,6 +218,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
   function close(): void {
     open.value = false
     apiKey.value = ''
+    exaApiKey.value = ''
     operationError.value = null
   }
 
@@ -276,6 +281,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
       await bridge.saveProvider({
         baseUrl: baseUrl.value,
         apiKey: apiKey.value || undefined,
+        exaApiKey: exaApiKey.value || undefined,
         headers: customHeaders,
         model: model.value,
         modelName,
@@ -330,6 +336,7 @@ export const useAgentProviderSettingsStore = defineStore('agent-provider-setting
     toolsOpen,
     baseUrl,
     apiKey,
+    exaApiKey,
     headers,
     protocol,
     profileName,

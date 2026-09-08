@@ -67,6 +67,8 @@ const copy = {
     openAiResponses: 'Open AI Response',
     baseUrl: 'Base URL',
     apiKey: 'API key',
+    exaApiKey: 'Exa API key',
+    exaApiKeyPlaceholder: 'Leave blank to keep the saved key',
     additionalHeaders: 'Additional headers (JSON)',
     additionalHeadersPlaceholder:
       '{\n  "HTTP-Referer": "https://example.com",\n  "X-OpenRouter-Title": "My app"\n}',
@@ -166,6 +168,8 @@ const copy = {
     openAiResponses: 'Open AI Response',
     baseUrl: 'Base URL',
     apiKey: 'API key',
+    exaApiKey: 'Exa API key',
+    exaApiKeyPlaceholder: '留空则保留已保存的 Key',
     additionalHeaders: '附加请求头（JSON）',
     additionalHeadersPlaceholder:
       '{\n  "HTTP-Referer": "https://example.com",\n  "X-OpenRouter-Title": "我的应用"\n}',
