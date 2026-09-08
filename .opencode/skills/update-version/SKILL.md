@@ -25,6 +25,8 @@ description: 升级组件库发布包版本
 
 ### 🏗️ 架构与重构 / Architecture & Refactoring
 
+### ⚡ 性能 / Performance
+
 ### 📚 文档 / Documentation
 
 其中，不包含的项目可以不填。
